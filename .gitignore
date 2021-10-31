@@ -3,3 +3,5 @@
 **/.vs/*
 **/__vm/*
 **/*.sln
+**/*vscode*/*
+**/release/*
