@@ -114,6 +114,9 @@ void change_alarm_state(){
   Serial.print("Stato ");
   Serial.println(STATO);
   }
+for(int i=0; i<2; i++) {
+  Serial.println(i);
+  }
 }
 
 bool check_movement_sensor(){
