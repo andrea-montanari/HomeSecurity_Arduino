@@ -6,6 +6,7 @@
 
 #define PIN 1
 #define STAMP 0
+#define SENSOR_MOVEMENT 2
 #define ALARM_TRIGGERED 3
 #define LENGTH_PIN 4
 
@@ -26,7 +27,7 @@ struct gestore
   bool alarm;          // mode: DISABLED/ENABLED
   bool siren;         // ON/OFF per far suonare l'allarme
   bool alarm_triggered;
-  bool b_motion_sensor;
+  int b_motion_sensor;
 }g;
 char user_pin[LENGTH_PIN];
 int index_pin; // per scorrere array pin
@@ -43,11 +44,11 @@ char hexaKeys[ROWS][COLS] = {
     {'7', '8', '9', 'C'},
     {'*', '0', '#', 'D'}};
     
-//byte rowPins[ROWS] = {9, 8, 7, 6}; //connect to the row pinouts of the keypad
-//byte colPins[COLS] = {5, 4, 3, 2}; //connect to the column pinouts of the keypad
+byte rowPins[ROWS] = {9, 8, 7, 6}; //connect to the row pinouts of the keypad
+byte colPins[COLS] = {5, 4, 3, 2}; //connect to the column pinouts of the keypad
 
-byte rowPins[ROWS] = {39, 41, 43, 45}; //connect to the row pinouts of the keypad
-byte colPins[COLS] = {47, 49, 51, 53}; //connect to the column pinouts of the keypad
+//byte rowPins[ROWS] = {39, 41, 43, 45}; //connect to the row pinouts of the keypad
+//byte colPins[COLS] = {47, 49, 51, 53}; //connect to the column pinouts of the keypad
 
 Keypad customKeypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS);
 
@@ -99,8 +100,9 @@ void print_alarm_state(){
 void start_pin(void *pvParameters)
 {
 	// Perché (TickType_t)100?
+    /*
     xSemaphoreTake(mutex, (TickType_t)100);
-    //Serial.println("Sono lo start_pin");
+    Serial.println("Sono lo start_pin");
     if (g.stato == PIN)
     {
         xSemaphoreGive(s_pin);
@@ -110,21 +112,36 @@ void start_pin(void *pvParameters)
         b_pin++;
     xSemaphoreGive(mutex);
     xSemaphoreTake(s_pin, (TickType_t)100); //mi blocco qui nel caso
+    */
 }
 
 void get_pin()
-{
+{   
+    //Serial.println("Sono la get_pin - stato: "+String(g.stato));
     char customKey = customKeypad.getKey();
-    while (!customKey)
-    { // se ho preso input
+    /*
+    int debug_var=0;
+    while (!(customKey)){
+    // il while è usato xk altrimenti l'input viene preso solo a certi momenti{ // se ho preso input
         customKey = customKeypad.getKey();
-        //Serial.println(customKey);
+        if (g.stato!=PIN){ 
+            // è stata messa questa condizione xk altrimenti si rimaneva incastrati qui e non si controllava il movimento del sensore
+            break;
+        } 
+        //Serial.println(++debug_var);
     }
+    */
     xSemaphoreTake(mutex, (TickType_t)100);
-    user_pin[index_pin] = customKey; // possibile race conditions su shared variable (per questo usato mutex)
-    index_pin++;                     //aggiorno index_pin
+    //Serial.println("LA get_pin ha preso mutex");
+    if(customKey){
+        user_pin[index_pin] = customKey; // possibile race conditions su shared variable (per questo usato mutex)
+        index_pin++;
+        }                     //aggiorno index_pin
     xSemaphoreGive(mutex);
+    //Serial.println("LA get_pin ha rilasciato mutex");
+
 }
+
 
 void end_pin(void *pvParameters)
 {
@@ -157,7 +174,7 @@ void start_stamp(void *pvParameters)
 void stamp()
 {
     print_user_pin();
-    print_alarm_state();
+    //print_alarm_state();
     if (index_pin == 4)
     {
         bool valid_pin = is_pin_valid(user_pin, true_system_pin); // check del pin con "0000"
@@ -167,20 +184,24 @@ void stamp()
             Serial.println(user_pin);
             xSemaphoreTake(mutex, (TickType_t)100);
             // il pin è giusto, quindi bisogna cambiare lo stato dell'allarme: nel caso in cui sia off->on nel caso sia on->off
+            // BISOGNERA' FARE REFACTORING, siccome non è ottimale
 			if (g.alarm) {
 				g.alarm = false;              //anche qui g.alarm è una var condivisa, quindi possibili race condition
 			}
 			else if (g.alarm_triggered) { // Impostare anche l'allarme ad off ?
 				g.alarm_triggered = false;
+                g.alarm=false; // se metti pin corretto quando è on o triggered spegni tutto
 				Serial.println("Allarme spento.");
 			}
 			else {
 				g.alarm = true;
+                /* Si può scegliere se mettere qui il risveglio o nel postambolo -> qui eviteresti il controllo sul g.alarm=true che farò nel postambolo
 				if (g.b_motion_sensor) {	// Sblocca il sensore di movimento se era bloccato
 					g.b_motion_sensor = false;
 					xSemaphoreGive(s_motion_sensor);
 					Serial.println("Attivo sensore movimento."); // Dopo aver attivato il sensore non risponde più agli input da tastierino (?)
 				}
+                */
 			}
             xSemaphoreGive(mutex);
 
@@ -202,13 +223,21 @@ void stamp()
 void end_stamp(void *pvParameters)
 {
     xSemaphoreTake(mutex, portMAX_DELAY);
-    Serial.println("Sono l'end_stamp");
-    g.siren = PIN;
-    if (b_pin)
+    //Serial.println("Sono l'end_stamp");
+    if (g.b_motion_sensor && g.alarm) {	// Sblocca il sensore di movimento se era bloccato
+					g.b_motion_sensor--;
+                    g.stato=SENSOR_MOVEMENT;
+					xSemaphoreGive(s_motion_sensor);
+					Serial.println("Sveglio sensore movimento."); // Dopo aver attivato il sensore non risponde più agli input da tastierino (?)
+				}
+                /*
+    else if (b_pin && !g.alarm)
     {
         b_pin--;
+        g.stato = PIN;
         xSemaphoreGive(s_pin);
     }
+    */
     xSemaphoreGive(mutex);
 }
 
@@ -217,28 +246,53 @@ void end_stamp(void *pvParameters)
 void start_motion_sensor(void* pvParameters)
 {
 	xSemaphoreTake(mutex, portMAX_DELAY);
-	if (g.alarm || g.alarm_triggered)
+    //Serial.println("Sono lo start_motion_sensor");
+	if ((g.alarm || g.alarm_triggered) && g.stato==SENSOR_MOVEMENT) //deve essere nello stato corretto
 	{
 		xSemaphoreGive(s_motion_sensor);
 		//Serial.println("Sensore di movimento parte.");
 	}
 	else {
 		Serial.println("Sensore di movimento si BLOCCA.");
-		g.b_motion_sensor = true;
+		g.b_motion_sensor++;
 	}
 	xSemaphoreGive(mutex);
 	xSemaphoreTake(s_motion_sensor, portMAX_DELAY); // mi blocco qui nel caso
 }
 
 void motion_sensor()
-{
-	movement_sensor_value = digitalRead(MOTION_SENSOR_PIN);
+{   //Serial.println("sono lo motion_sensor");
+    xSemaphoreTake(mutex, portMAX_DELAY);
+	movement_sensor_value = digitalRead(MOTION_SENSOR_PIN); // shared variable, uso mutex
+    xSemaphoreGive(mutex);
+    /*
 	if (movement_sensor_value) {
 		// digitalWrite(ledPin, movement_sensor_value);
 		g.alarm_triggered = true;
 		Serial.println("\nMovimento rilevato!!!\n");
 	}
+    */
+}
 
+void end_motion_sensor(void* pvParameters)
+{
+	xSemaphoreTake(mutex, portMAX_DELAY);
+    //Serial.println("Sono end_motion_sensor");
+    if (movement_sensor_value) { // if (movement_sensor_value && blocked_sirena)
+		// digitalWrite(ledPin, movement_sensor_value);
+        // g.stato=SIRENA -> non ancora implementato
+        // blocked_sirena--; -> non ancora implementato
+        // xSemaphoreGive(semaforo_privato_sirena); -> non ancora implementato
+		g.alarm_triggered = true;
+        g.stato=PIN; // da modificare in stato sirena
+		Serial.println("\nMovimento rilevato!!!\n");
+	}
+    else if (!movement_sensor_value && b_pin){
+        //b_pin--;
+        g.stato=PIN; // forse inutile
+        //xSemaphoreGive(s_pin);
+    }
+	xSemaphoreGive(mutex);
 }
 
 
@@ -285,17 +339,17 @@ void setup()
 	s_motion_sensor = xSemaphoreCreateBinary();
 
     xTaskCreate(
-        taskStamp, "task-stamp", 128, NULL, 1 // priority
+        taskStamp, "task-stamp", 256, NULL, 1 // priority
         ,
         NULL);
 
     xTaskCreate(
-        taskPin, "task-pin", 128, NULL, 10 // priority
+        taskPin, "task-pin", 256, NULL, 10 // priority
         ,
         NULL);
 
 	xTaskCreate(
-		taskMotionSensor, "task-motion-sensor", 128, NULL, 10 // priority
+		taskMotionSensor, "task-motion-sensor", 256, NULL, 100 // priority
 		,
 		NULL);
         
@@ -308,9 +362,9 @@ void taskStamp(void *pvParameters) // This is a task.
     for (;;)
     {
         start_stamp(pvParameters);
-        //vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
+        vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
         stamp();
-        //vTaskDelay(100 / portTICK_PERIOD_MS);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
         end_stamp(pvParameters);
     }
 }
@@ -322,9 +376,9 @@ void taskPin(void *pvParameters)
     for (;;)
     {
         start_pin(pvParameters);
-        //vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
+        vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
         get_pin();
-       //vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
+        vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
         end_pin(pvParameters);
     }
 }
@@ -336,9 +390,11 @@ void taskMotionSensor(void* pvParameters)
 	for (;;)
 	{
 		start_motion_sensor(pvParameters);
-		//vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
+		vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
 		motion_sensor();
-		//vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
+		vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
+        end_motion_sensor(pvParameters);
+
 	}
 }
 
