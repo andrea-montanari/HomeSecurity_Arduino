@@ -306,6 +306,7 @@ void end_motion_sensor(void* pvParameters)
 	}
     else if (!movement_sensor_value && b_pin){
         //b_pin--;
+        Serial.println("END_MOTION_SENSOR: Nessun movimento, sveglio il PIN");
         g.stato=PIN; // forse inutile
         //xSemaphoreGive(s_pin);
     }
@@ -324,6 +325,8 @@ void start_siren(void* pvParameters)
 	else {
 		//Serial.println("Sirena si BLOCCA.");
 		g.b_siren++;
+        Serial.println("Start_siren: la sirena si è bloccata");
+
 	}
 	xSemaphoreGive(mutex);
 	xSemaphoreTake(s_siren, portMAX_DELAY); // mi blocco qui nel caso
@@ -396,7 +399,7 @@ void setup()
         NULL);
 
     xTaskCreate(
-        taskPin, "task-pin", 256, NULL, 10 // priority
+        taskPin, "task-pin", 256, NULL, 2 // priority
         ,
         NULL);
 
@@ -405,7 +408,7 @@ void setup()
 		,
 		NULL);
     xTaskCreate(
-		taskSiren, "task-siren", 256, NULL, 10 // priority
+		taskSiren, "task-siren", 256, NULL, 3 // priority
 		,
 		NULL);
         
