@@ -356,9 +356,9 @@ void taskStamp(void *pvParameters) // This is a task.
     for (;;)
     {
         start_stamp(pvParameters);
-        vTaskDelay(20 / portTICK_PERIOD_MS); // wait for one second
+        //vTaskDelay(20 / portTICK_PERIOD_MS); // wait for one second
         stamp();
-        vTaskDelay(20 / portTICK_PERIOD_MS);
+        //vTaskDelay(20 / portTICK_PERIOD_MS);
         //end_stamp(pvParameters);
     }
 }
@@ -381,9 +381,9 @@ void taskMotionSensor(void* pvParameters)
 	for (;;)
 	{
 		start_motion_sensor(pvParameters);
-		vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
+		//vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
 		motion_sensor();
-		vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
+		//vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
         end_motion_sensor(pvParameters);
 
 	}
@@ -396,9 +396,9 @@ void taskSiren(void* pvParameters)
 	for (;;)
 	{
 		start_siren(pvParameters);
-		vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
+		//vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
 		siren();
-		vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
+		//vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
 
 	}
 }
