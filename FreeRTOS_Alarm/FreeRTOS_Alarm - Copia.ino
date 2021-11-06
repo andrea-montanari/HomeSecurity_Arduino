@@ -4,7 +4,7 @@
 
 #define INCLUDE_vTaskSuspend 1
 
-//#define PIETRO 42 // togli se sei monta
+#define PIETRO 42 // togli se sei monta
 
 // stati
 #define STAMP 0
@@ -187,10 +187,6 @@ void stamp()
 			}
 			else {
 				g.alarm = true;
-				g.b_motion_sensor--;
-				g.stato = SENSOR_MOVEMENT;
-				xSemaphoreGive(s_motion_sensor);
-				Serial.println("END_STAMP: Sveglio sensore movimento.");
 			}
             xSemaphoreGive(mutex);
         }
@@ -208,16 +204,29 @@ void stamp()
     }
 }
 
+void end_stamp(void *pvParameters)
+{
+    xSemaphoreTake(mutex, portMAX_DELAY);
+    //Serial.println("Sono l'end_stamp");
+    if (g.b_motion_sensor && g.alarm) {	// Sblocca il sensore di movimento se era bloccato
+					g.b_motion_sensor--;
+                    g.stato=SENSOR_MOVEMENT;
+					xSemaphoreGive(s_motion_sensor);
+					Serial.println("END_STAMP: Sveglio sensore movimento."); // Dopo aver attivato il sensore non risponde più agli input da tastierino (?)
+				}
+    xSemaphoreGive(mutex);
+}
+
 
 
 void start_motion_sensor(void* pvParameters)
 {
 	xSemaphoreTake(mutex, portMAX_DELAY);
     //Serial.println("Sono lo start_motion_sensor");
-	if (g.alarm || g.alarm_triggered) //deve essere nello stato corretto
+	if ((g.alarm || g.alarm_triggered) && g.stato==SENSOR_MOVEMENT) //deve essere nello stato corretto
 	{
 		xSemaphoreGive(s_motion_sensor);
-		Serial.println("Sensore di movimento parte.");
+		//Serial.println("Sensore di movimento parte.");
 	}
 	else {
 		Serial.println("START_MOTION_SENSOR: Sensore di movimento si BLOCCA.");
@@ -236,7 +245,6 @@ void motion_sensor()
 
 void end_motion_sensor(void* pvParameters)
 {
-	Serial.println("END_MOTION_SENSOR: Nessun movimento");
 	xSemaphoreTake(mutex, portMAX_DELAY);
     //Serial.println("Sono end_motion_sensor");
     if (movement_sensor_value) { 
@@ -246,9 +254,11 @@ void end_motion_sensor(void* pvParameters)
             g.b_siren--;
             xSemaphoreGive(s_siren);
             }
-		Serial.println("\n----------------------------------------- MOVIMENTO RILEVATO!!! -----------------------------------------\n");
+		Serial.println("\nMovimento rilevato!!!\n");
 	}
-
+    else if (!movement_sensor_value){
+        Serial.println("END_MOTION_SENSOR: Nessun movimento, sveglio il PIN");
+    }
 	xSemaphoreGive(mutex);
 }
 
@@ -359,7 +369,7 @@ void taskStamp(void *pvParameters) // This is a task.
         vTaskDelay(20 / portTICK_PERIOD_MS); // wait for one second
         stamp();
         vTaskDelay(20 / portTICK_PERIOD_MS);
-        //end_stamp(pvParameters);
+        end_stamp(pvParameters);
     }
 }
 
