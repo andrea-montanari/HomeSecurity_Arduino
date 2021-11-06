@@ -4,6 +4,8 @@
 
 #define INCLUDE_vTaskSuspend 1
 
+#ifdef PIETRO
+
 #define PIN 1
 #define STAMP 0
 #define SENSOR_MOVEMENT 2
@@ -14,6 +16,21 @@
 
 #define MOTION_SENSOR_PIN 31
 #define BUZZER_PIN 29
+
+#else
+
+#define PIN 1
+#define STAMP 0
+#define SENSOR_MOVEMENT 2
+#define SIREN 4
+
+#define ALARM_TRIGGERED 3
+#define LENGTH_PIN 4
+
+#define MOTION_SENSOR_PIN 31
+#define BUZZER_PIN 29
+
+#endif
 
 // Semafori privati e mutex
 SemaphoreHandle_t mutex = NULL;
@@ -53,11 +70,17 @@ char hexaKeys[ROWS][COLS] = { // Per il Pin
     {'7', '8', '9', 'C'},
     {'*', '0', '#', 'D'}};
     
+#ifdef PIETRO
+
 byte rowPins[ROWS] = {9, 8, 7, 6}; //connect to the row pinouts of the keypad 
 byte colPins[COLS] = {5, 4, 3, 2}; //connect to the column pinouts of the keypad
 
-//byte rowPins[ROWS] = {39, 41, 43, 45}; //connect to the row pinouts of the keypad
-//byte colPins[COLS] = {47, 49, 51, 53}; //connect to the column pinouts of the keypad
+#else
+
+byte rowPins[ROWS] = {39, 41, 43, 45}; //connect to the row pinouts of the keypad
+byte colPins[COLS] = {47, 49, 51, 53}; //connect to the column pinouts of the keypad
+
+#endif
 
 Keypad customKeypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS);
 
