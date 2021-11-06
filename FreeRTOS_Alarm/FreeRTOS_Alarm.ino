@@ -166,33 +166,35 @@ void stamp()
 {
     print_user_pin();
     //print_alarm_state();
+	xSemaphoreTake(mutex, (TickType_t)100);
     if (index_pin == 4)
     {
         bool valid_pin = is_pin_valid(user_pin, true_system_pin); // check del pin con "0000"
         if (valid_pin)
         {
             Serial.print("Il pin inserito è GIUSTO ");
-            Serial.println(user_pin);
-            xSemaphoreTake(mutex, (TickType_t)100);
+			Serial.println(user_pin);
             // il pin è giusto, quindi bisogna cambiare lo stato dell'allarme: nel caso in cui sia off->on nel caso sia on->off
             // BISOGNERA' FARE REFACTORING, siccome non è ottimale
 			if (g.alarm) {
 				g.alarm = false;              //anche qui g.alarm è una var condivisa, quindi possibili race condition
                 Serial.println("Allarme spento.");
+				if (g.alarm_triggered) {
+					g.alarm_triggered = false;
+				}
                 if (g.b_siren && g.alarm_triggered){
                     g.b_siren--;
                     xSemaphoreGive(s_siren); // sveglio la sirena per dirgli di spegnere il suono
                 }
-                g.alarm_triggered=false;
 			}
 			else {
 				g.alarm = true;
 				g.b_motion_sensor--;
-				g.stato = SENSOR_MOVEMENT;
+				//g.stato = SENSOR_MOVEMENT;
 				xSemaphoreGive(s_motion_sensor);
 				Serial.println("END_STAMP: Sveglio sensore movimento.");
 			}
-            xSemaphoreGive(mutex);
+            
         }
         else
         {
@@ -200,12 +202,15 @@ void stamp()
             Serial.println(user_pin);
         }
         //init_pin(&index_pin); // rinizializzo il pin
+
         for (int k = 0; k > LENGTH_PIN; k++)
         {
             user_pin[k] = -1;
         }
         index_pin = 0;
     }
+	g.stato = 10;
+	xSemaphoreGive(mutex);
 }
 
 
@@ -239,10 +244,10 @@ void end_motion_sensor(void* pvParameters)
 	Serial.println("END_MOTION_SENSOR: Nessun movimento");
 	xSemaphoreTake(mutex, portMAX_DELAY);
     //Serial.println("Sono end_motion_sensor");
-    if (movement_sensor_value) { 
+    if (movement_sensor_value && g.alarm) { 
 		g.alarm_triggered = true;
         if (!g.siren && g.b_siren){ // sveglio la sirena (siccome prima era spenta)
-            g.stato=SIREN;
+            //g.stato=SIREN;
             g.b_siren--;
             xSemaphoreGive(s_siren);
             }
@@ -254,27 +259,25 @@ void end_motion_sensor(void* pvParameters)
 
 void start_siren(void* pvParameters)
 {
+	xSemaphoreTake(s_siren, portMAX_DELAY);
     xSemaphoreTake(mutex, portMAX_DELAY);
     //Serial.println("Sono lo start_motion_sensor");
-	if (g.stato==SIREN) //deve essere nello stato corretto
+	if (g.alarm_triggered) //deve essere nello stato corretto
 	{
-		xSemaphoreGive(s_siren);
-		//Serial.println("Sensore di movimento parte.");
+		tone(BUZZER_PIN, 1000);
 	}
 	else {
-		//Serial.println("Sirena si BLOCCA.");
-		g.b_siren++;
-        Serial.println("Start_siren: la sirena si è bloccata");
-
+		noTone(BUZZER_PIN);
 	}
 	xSemaphoreGive(mutex);
-	xSemaphoreTake(s_siren, portMAX_DELAY); // mi blocco qui nel caso
-    Serial.println("La sirena si è svegliata!");
 }
 
+
+// Lettura di var. condivise fuori dal mutex?
+/*
 void siren(){
  // A duration can be specified, otherwise the wave continues until a call to noTone(). 
- if(g.siren){ // la sirena è accesa, sono stato svegliato dal task STAMP per spegnerla (oppure, nelle seguenti implementazioni anche da un timer, che quando scade dice di finire di suonare)
+ if(!g.alarm_triggered){ // la sirena è accesa, sono stato svegliato dal task STAMP per spegnerla (oppure, nelle seguenti implementazioni anche da un timer, che quando scade dice di finire di suonare)
     noTone(BUZZER_PIN);
     xSemaphoreTake(mutex, portMAX_DELAY); // race condition
     g.siren=false;
@@ -287,6 +290,7 @@ void siren(){
     xSemaphoreGive(mutex);
  }
 }
+*/
 
 
 
@@ -397,8 +401,8 @@ void taskSiren(void* pvParameters)
 	{
 		start_siren(pvParameters);
 		vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
-		siren();
-		vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
+		//siren();
+		//vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
 
 	}
 }
