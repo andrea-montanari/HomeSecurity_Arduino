@@ -7,9 +7,9 @@
 //#define PIETRO 42 // togli se sei monta
 
 // stati
-#define STAMP 0
-#define SENSOR_MOVEMENT 1
-#define SIREN 2
+#define ALARM_ON 0
+#define ALARM_OFF 1
+#define ALARM_TRIGGERED 2
 
 // lunghezza PIN
 #define LENGTH_PIN 4
@@ -49,12 +49,12 @@ int index_pin; // indice per gestire user_pin
 struct gestore
 {
   int stato;
-  bool alarm;          // mode: DISABLED/ENABLED
-  bool siren;         // ON/OFF per far suonare l'allarme
-  bool alarm_triggered;
+//   bool alarm;          // mode: DISABLED/ENABLED
+//   bool siren;         // ON/OFF per far suonare l'allarme
+//   bool alarm_triggered;
   int b_motion_sensor;
-  int b_siren;
-  int b_stamp;
+//   int b_siren;
+//   int b_stamp;
 }g;
 
 int movement_sensor_value; // Place to store read PIR Value
@@ -109,8 +109,8 @@ void print_user_pin()
 
 // usate per debug, per capire quando allarme è on e quando è off
 void print_alarm_state(){
-    if(g.alarm)Serial.println("Alarm On");
-    else Serial.println("Alarm Off");
+    // if(g.alarm)Serial.println("Alarm On");
+    // else Serial.println("Alarm Off");
 }
 
 /**
@@ -167,31 +167,35 @@ void stamp()
     print_user_pin();
     //print_alarm_state();
     xSemaphoreTake(s_stamp, (TickType_t)100);
-    
+
 	xSemaphoreTake(mutex, (TickType_t)100);
     if (index_pin == 4)
     {
         bool valid_pin = is_pin_valid(user_pin, true_system_pin); // check del pin con "0000"
+
+        // Switch case per essere più efficienti??
         if (valid_pin)
         {
             Serial.print("Il pin inserito è GIUSTO ");
 			Serial.println(user_pin);
             // il pin è giusto, quindi bisogna cambiare lo stato dell'allarme: nel caso in cui sia off->on nel caso sia on->off
             // BISOGNERA' FARE REFACTORING, siccome non è ottimale
-			if (g.alarm) {
-				g.alarm = false;              //anche qui g.alarm è una var condivisa, quindi possibili race condition
+			if (g.stato == ALARM_ON) {
+				g.stato = ALARM_OFF;              //anche qui g.alarm è una var condivisa, quindi possibili race condition
                 Serial.println("Allarme spento.");
-				if (g.alarm_triggered) {
-					g.alarm_triggered = false;
-          xSemaphoreGive(s_siren);
-				}
+
                // if (g.b_siren && g.alarm_triggered){
                     //g.b_siren--;
                     //xSemaphoreGive(s_siren); // sveglio la sirena per dirgli di spegnere il suono
                 //}
 			}
+            else if (g.stato == ALARM_TRIGGERED) {
+					g.stato = ALARM_OFF;
+          xSemaphoreGive(s_siren);
+          	}
 			else {
-				g.alarm = true;
+				// g.alarm = true;
+                g.stato = ALARM_ON;
 				g.b_motion_sensor--;
 				//g.stato = SENSOR_MOVEMENT;
 				xSemaphoreGive(s_motion_sensor);
@@ -222,7 +226,7 @@ void start_motion_sensor(void* pvParameters)
 {
 	xSemaphoreTake(mutex, portMAX_DELAY);
     //Serial.println("Sono lo start_motion_sensor");
-	if (g.alarm || g.alarm_triggered) //deve essere nello stato corretto
+	if (g.stato == ALARM_ON || g.stato == ALARM_TRIGGERED) //deve essere nello stato corretto
 	{
 		xSemaphoreGive(s_motion_sensor);
 		Serial.println("Sensore di movimento parte.");
@@ -247,8 +251,8 @@ void end_motion_sensor(void* pvParameters)
 	Serial.println("END_MOTION_SENSOR: Nessun movimento");
 	xSemaphoreTake(mutex, portMAX_DELAY);
     //Serial.println("Sono end_motion_sensor");
-  if (movement_sensor_value && g.alarm) { 
-		  g.alarm_triggered = true;
+  if (movement_sensor_value && g.stato == ALARM_ON) { 
+		  g.stato = ALARM_TRIGGERED;
         //if (!g.siren && g.b_siren){ // sveglio la sirena (siccome prima era spenta)
             //g.stato=SIREN;
             //g.b_siren--;
@@ -265,7 +269,7 @@ void start_siren(void* pvParameters)
 	xSemaphoreTake(s_siren, portMAX_DELAY);
     xSemaphoreTake(mutex, portMAX_DELAY);
     //Serial.println("Sono lo start_motion_sensor");
-	if (g.alarm_triggered) //deve essere nello stato corretto
+	if (g.stato == ALARM_TRIGGERED) //deve essere nello stato corretto
 	{
 		Serial.println("---------------------------- SIRENA ACCESA ----------------------------!!!");
 		tone(BUZZER_PIN, 1000);
@@ -307,9 +311,9 @@ void setup()
     Serial.println("Inizio il setup");
 
     //g.stato = PIN;
-    g.alarm=false;
+    // g.alarm=false;
     g.siren=false;
-	g.alarm_triggered = false;
+	// g.alarm_triggered = false;
 	g.b_motion_sensor = false;
 
     // inizializzo i pin
