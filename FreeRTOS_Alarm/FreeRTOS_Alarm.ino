@@ -139,12 +139,12 @@ void end_pin(void *pvParameters)
 {
     //Serial.println("Sono lo end_pin");
     xSemaphoreTake(mutex, (TickType_t)100);
-    if (g.b_stamp)
-    {
+    // if (g.b_stamp)
+    // {
         //g.stato = STAMP;
         //g.b_stamp--;
         xSemaphoreGive(s_stamp);
-    }
+    // }
     xSemaphoreGive(mutex);
 }
 
@@ -218,7 +218,7 @@ void stamp()
         }
         index_pin = 0;
     }
-	g.stato = 10;
+	//g.stato = 10;
 	xSemaphoreGive(mutex);
 }
 
@@ -234,6 +234,7 @@ void start_motion_sensor(void* pvParameters)
 		Serial.println("Sensore di movimento parte.");
 	}
 	else {
+        Serial.print("Stato allarme: "); Serial.println(g.stato);
 		Serial.println("START_MOTION_SENSOR: Sensore di movimento si BLOCCA.");
 		g.b_motion_sensor++;
 	}
@@ -314,8 +315,9 @@ void setup()
 
     //g.stato = PIN;
     // g.alarm=false;
-    g.siren=false;
+    // g.siren=false;
 	// g.alarm_triggered = false;
+    g.stato = ALARM_OFF;
 	g.b_motion_sensor = false;
 
     // inizializzo i pin
@@ -324,7 +326,7 @@ void setup()
         user_pin[k] = -1;
     }
     index_pin = 0;
-    g.b_stamp = 0;
+    // g.b_stamp = 0;
     
 	// Credo che i controlli si possano togliere (?)
     if (mutex == NULL) // Check to confirm that the Serial Semaphore has not already been created.
@@ -370,7 +372,7 @@ void taskStamp(void *pvParameters) // This is a task.
 
     for (;;)
     {
-        start_stamp(pvParameters);
+        //start_stamp(pvParameters);
         vTaskDelay(20 / portTICK_PERIOD_MS); // wait for one second
         stamp();
         vTaskDelay(20 / portTICK_PERIOD_MS);
