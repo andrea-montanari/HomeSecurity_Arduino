@@ -1,3 +1,5 @@
+#include "FreeRTOSConfig.h"
+
 #include <Arduino_FreeRTOS.h>
 #include <semphr.h>
 #include <Keypad.h>
