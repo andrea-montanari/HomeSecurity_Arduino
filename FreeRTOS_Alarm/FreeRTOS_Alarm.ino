@@ -181,11 +181,12 @@ void stamp()
                 Serial.println("Allarme spento.");
 				if (g.alarm_triggered) {
 					g.alarm_triggered = false;
+          xSemaphoreGive(s_siren);
 				}
-                if (g.b_siren && g.alarm_triggered){
-                    g.b_siren--;
-                    xSemaphoreGive(s_siren); // sveglio la sirena per dirgli di spegnere il suono
-                }
+               // if (g.b_siren && g.alarm_triggered){
+                    //g.b_siren--;
+                    //xSemaphoreGive(s_siren); // sveglio la sirena per dirgli di spegnere il suono
+                //}
 			}
 			else {
 				g.alarm = true;
@@ -244,13 +245,13 @@ void end_motion_sensor(void* pvParameters)
 	Serial.println("END_MOTION_SENSOR: Nessun movimento");
 	xSemaphoreTake(mutex, portMAX_DELAY);
     //Serial.println("Sono end_motion_sensor");
-    if (movement_sensor_value && g.alarm) { 
-		g.alarm_triggered = true;
-        if (!g.siren && g.b_siren){ // sveglio la sirena (siccome prima era spenta)
+  if (movement_sensor_value && g.alarm) { 
+		  g.alarm_triggered = true;
+        //if (!g.siren && g.b_siren){ // sveglio la sirena (siccome prima era spenta)
             //g.stato=SIREN;
-            g.b_siren--;
-            xSemaphoreGive(s_siren);
-            }
+            //g.b_siren--;
+      xSemaphoreGive(s_siren);
+        //}
 		Serial.println("\n----------------------------------------- MOVIMENTO RILEVATO!!! -----------------------------------------\n");
 	}
 
@@ -264,9 +265,11 @@ void start_siren(void* pvParameters)
     //Serial.println("Sono lo start_motion_sensor");
 	if (g.alarm_triggered) //deve essere nello stato corretto
 	{
+		Serial.println("---------------------------- SIRENA ACCESA ----------------------------!!!");
 		tone(BUZZER_PIN, 1000);
 	}
 	else {
+		Serial.println("---------------------------- SIRENA ACCESA ----------------------------!!!");
 		noTone(BUZZER_PIN);
 	}
 	xSemaphoreGive(mutex);
