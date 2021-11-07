@@ -139,26 +139,26 @@ void end_pin(void *pvParameters)
     xSemaphoreTake(mutex, (TickType_t)100);
     if (g.b_stamp)
     {
-        g.stato = STAMP;
-        g.b_stamp--;
+        //g.stato = STAMP;
+        //g.b_stamp--;
         xSemaphoreGive(s_stamp);
     }
     xSemaphoreGive(mutex);
 }
 
-void start_stamp(void *pvParameters)
-{
-    xSemaphoreTake(mutex, (TickType_t)100);
-    //Serial.println("Sono lo start_stamp");
-    if (g.stato == STAMP)
-    {
-        xSemaphoreGive(s_stamp);
-    }
-    else
-        g.b_stamp++;
-    xSemaphoreGive(mutex);
-    xSemaphoreTake(s_stamp, (TickType_t)100); // mi blocco qui nel caso
-}
+// void start_stamp(void *pvParameters)
+// {
+//     xSemaphoreTake(mutex, (TickType_t)100);
+//     //Serial.println("Sono lo start_stamp");
+//     if (g.stato == STAMP)
+//     {
+//         xSemaphoreGive(s_stamp);
+//     }
+//     else
+//         g.b_stamp++;
+//     xSemaphoreGive(mutex);
+//     xSemaphoreTake(s_stamp, (TickType_t)100); // mi blocco qui nel caso
+// }
 
 // Qui la stampa è fatta su seriale (potremmo mantenerlo come un task a parte(?))
 // Importante perchè qui si modificano i vari stati dell'allarme, e si svegliano anche dei task (sirena)
@@ -166,6 +166,8 @@ void stamp()
 {
     print_user_pin();
     //print_alarm_state();
+    xSemaphoreTake(s_stamp, (TickType_t)100);
+    
 	xSemaphoreTake(mutex, (TickType_t)100);
     if (index_pin == 4)
     {
