@@ -1,6 +1,5 @@
-#include "FreeRTOSConfig.h"
-
 #include <Arduino_FreeRTOS.h>
+#include "FreeRTOSConfig.h"
 #include <semphr.h>
 #include <Keypad.h>
 
@@ -126,6 +125,7 @@ void print_alarm_state(){
 void get_pin()
 {   
     //Serial.println("Sono la get_pin - stato: "+String(g.stato));
+    Serial.println("-------");
     char customKey = customKeypad.getKey();
     
     if(customKey){
@@ -203,9 +203,10 @@ void stamp()
 			else {
 				// g.alarm = true;
                 g.stato = ALARM_ON;
-				g.b_motion_sensor--;
-				//g.stato = SENSOR_MOVEMENT;
-				xSemaphoreGive(s_motion_sensor);
+                if (g.b_motion_sensor) {
+				    g.b_motion_sensor--;
+				    xSemaphoreGive(s_motion_sensor);
+                }
                 xSemaphoreGive(s_LED);
 				Serial.println("END_STAMP: Sveglio sensore movimento.");
 			}
@@ -257,7 +258,7 @@ void motion_sensor()
 
 void end_motion_sensor(void* pvParameters)
 {
-	Serial.println("END_MOTION_SENSOR: Nessun movimento");
+	//Serial.println("END_MOTION_SENSOR: Nessun movimento");
 	xSemaphoreTake(mutex, portMAX_DELAY);
     //Serial.println("Sono end_motion_sensor");
   if (movement_sensor_value && g.stato == ALARM_ON) { 
@@ -332,7 +333,7 @@ void statusLED(void *pvParameters) {
 void setup()
 {
 	pinMode(MOTION_SENSOR_PIN, INPUT);
-    Serial.begin(9600);
+    Serial.begin(19200);
     Serial.println("Inizio il setup");
     Serial.println("No delays");
 
@@ -422,6 +423,7 @@ void taskPin(void *pvParameters)
         get_pin();
         //vTaskDelay(50 / portTICK_PERIOD_MS); // wait for one second
         end_pin(pvParameters);
+        taskYIELD();
     }
 }
 
@@ -436,7 +438,7 @@ void taskMotionSensor(void* pvParameters)
 		motion_sensor();
 		//vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
         end_motion_sensor(pvParameters);
-
+        taskYIELD();
 	}
 }
 
