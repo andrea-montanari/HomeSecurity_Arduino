@@ -2,6 +2,7 @@
 #include "FreeRTOSConfig.h"
 #include <semphr.h>
 #include <Keypad.h>
+#include <Servo.h>
 
 #define INCLUDE_vTaskSuspend 1
 
@@ -11,11 +12,14 @@
 #define ALARM_ON 2
 #define ALARM_OFF 3
 #define ALARM_TRIGGERED 4
+#define SERVO 5
 
 // lunghezza PIN
 #define LENGTH_PIN 4
 #define MOTION_SENSOR_PIN 31
 #define BUZZER_PIN 29
+#define SERVO_PIN 9
+#define WINDOW_PIN 13 // pin del bottone 
 
 #define MAX_COLOR_INTENSITY 255
 #define MIN_COLOR_INTENSITY 0
@@ -42,6 +46,7 @@ byte colPins[COLS] = {47, 49, 51, 53}; //connect to the column pinouts of the ke
 
 // inizializzazione del keypad
 Keypad customKeypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS);
+Servo myservo;
 
 
 char true_system_pin[4] = {'0', '0', '0', '0'}; // password giusta del sistema
@@ -57,25 +62,32 @@ struct gestore
 //   bool alarm_triggered;
   int b_motion_sensor;
 //   int b_siren;
-//   int b_stamp;
+//   int b_stamp
+  int n_sensor;
+  int position;
 }g;
 
 int movement_sensor_value; // Place to store read PIR Value
+int window_sensor_value;  // store del valore del bottone (che simula una finestra) (qui quando è = 0 è stato triggerato)
 
 
 // Semafori privati e mutex
 SemaphoreHandle_t mutex = NULL;
 SemaphoreHandle_t s_pin = NULL;
 SemaphoreHandle_t s_stamp = NULL;
-SemaphoreHandle_t s_motion_sensor = NULL;
+SemaphoreHandle_t s_motion_sensor = NULL; // questo semaforo è usato per sincronizzare due sensori
 SemaphoreHandle_t s_siren = NULL;
 SemaphoreHandle_t s_LED = NULL;
+SemaphoreHandle_t s_servo = NULL;
 
 
 void taskPin(void *pvParameters);
 void taskStamp(void *pvParameters);
 void taskMotionSensor(void* pvParameters);
 void taskSiren(void* pvParameters);
+void taskServo(void* pvParameters);
+void taskLED(void* pvParameters);
+void taskWindow(void* pvParameters); // task per il bottone
 
 
 /*funzioni di supporto - usate (e anche non ancora usate) per printare o per controllare */
@@ -117,17 +129,12 @@ void print_alarm_state(){
     // else Serial.println("Alarm Off");
 }
 
-/**
- * Funzioni usate per la sincronizzazione dei task (preambolo e postambolo)
- */
-
 
 void get_pin()
 {   
-    //Serial.println("Sono la get_pin - stato: "+String(g.stato));
-    Serial.println("-------");
+    //vTaskDelay(50 / portTICK_PERIOD_MS); 
+    //Serial.println("-------");
     char customKey = customKeypad.getKey();
-    
     if(customKey){
         xSemaphoreTake(mutex, (TickType_t)100);
         user_pin[index_pin] = customKey; // possibile race conditions su shared variable (per questo usato mutex)
@@ -140,30 +147,9 @@ void get_pin()
 
 void end_pin(void *pvParameters)
 {
-    //Serial.println("Sono lo end_pin");
-    xSemaphoreTake(mutex, (TickType_t)100);
-    // if (g.b_stamp)
-    // {
-        //g.stato = STAMP;
-        //g.b_stamp--;
-        xSemaphoreGive(s_stamp);
-    // }
-    xSemaphoreGive(mutex);
+    xSemaphoreGive(s_stamp);
 }
 
-// void start_stamp(void *pvParameters)
-// {
-//     xSemaphoreTake(mutex, (TickType_t)100);
-//     //Serial.println("Sono lo start_stamp");
-//     if (g.stato == STAMP)
-//     {
-//         xSemaphoreGive(s_stamp);
-//     }
-//     else
-//         g.b_stamp++;
-//     xSemaphoreGive(mutex);
-//     xSemaphoreTake(s_stamp, (TickType_t)100); // mi blocco qui nel caso
-// }
 
 // Qui la stampa è fatta su seriale (potremmo mantenerlo come un task a parte(?))
 // Importante perchè qui si modificano i vari stati dell'allarme, e si svegliano anche dei task (sirena)
@@ -189,26 +175,24 @@ void stamp()
 				g.stato = ALARM_OFF;              //anche qui g.alarm è una var condivisa, quindi possibili race condition
                 Serial.println("Allarme spento.");
                 xSemaphoreGive(s_LED);
-
-               // if (g.b_siren && g.alarm_triggered){
-                    //g.b_siren--;
-                    //xSemaphoreGive(s_siren); // sveglio la sirena per dirgli di spegnere il suono
-                //}
 			}
             else if (g.stato == ALARM_TRIGGERED) {
 				g.stato = ALARM_OFF;
+                g.position=90; // la videocamera deve riprendere il suo stato iniziale (ovvero 90 gradi: al centro)
                 xSemaphoreGive(s_siren);
                 xSemaphoreGive(s_LED);
+                xSemaphoreGive(s_servo); // sveglio il servo in quanto si deve svegliare per applicare la rotazione alla videocamera
           	}
 			else {
-				// g.alarm = true;
                 g.stato = ALARM_ON;
-                if (g.b_motion_sensor) {
+                while (g.b_motion_sensor) { // siccome ci sono 2 sensori devo svegliarli entrambi
+                	Serial.println("END_STAMP: Sveglio sensore movimento."); // potrebbe essere per questo
+                    //vTaskDelay(20 / portTICK_PERIOD_MS); 
 				    g.b_motion_sensor--;
+                    g.n_sensor++;
 				    xSemaphoreGive(s_motion_sensor);
                 }
                 xSemaphoreGive(s_LED);
-				Serial.println("END_STAMP: Sveglio sensore movimento.");
 			}
             
         }
@@ -238,7 +222,8 @@ void start_motion_sensor(void* pvParameters)
 	if (g.stato == ALARM_ON || g.stato == ALARM_TRIGGERED) //deve essere nello stato corretto
 	{
 		xSemaphoreGive(s_motion_sensor);
-		Serial.println("Sensore di movimento parte.");
+        g.n_sensor++;
+		//Serial.println("Sensore di movimento parte.");
 	}
 	else {
         Serial.print("Stato allarme: "); Serial.println(g.stato);
@@ -246,34 +231,121 @@ void start_motion_sensor(void* pvParameters)
 		g.b_motion_sensor++;
 	}
 	xSemaphoreGive(mutex);
+
+    xSemaphoreTake(mutex, portMAX_DELAY);
 	xSemaphoreTake(s_motion_sensor, portMAX_DELAY); // mi blocco qui nel caso
+    Serial.println("Sono il motion sensor e mi sono sbloccato");
+    xSemaphoreGive(mutex);
 }
 
 void motion_sensor()
 {   //Serial.println("sono lo motion_sensor");
     xSemaphoreTake(mutex, portMAX_DELAY);
+    //Serial.println("Sono il motion sensor e mi sono sbloccato");
 	movement_sensor_value = digitalRead(MOTION_SENSOR_PIN); // shared variable, uso mutex
+    Serial.print("PIR value:");
+    Serial.print(movement_sensor_value);
+    Serial.print(" - n_sensor: ");
+    Serial.println(g.n_sensor);
     xSemaphoreGive(mutex);
 }
 
 void end_motion_sensor(void* pvParameters)
 {
-	//Serial.println("END_MOTION_SENSOR: Nessun movimento");
+    //vTaskDelay(50 / portTICK_PERIOD_MS); 
 	xSemaphoreTake(mutex, portMAX_DELAY);
-    //Serial.println("Sono end_motion_sensor");
-  if (movement_sensor_value && g.stato == ALARM_ON) { 
-		  g.stato = ALARM_TRIGGERED;
-        //if (!g.siren && g.b_siren){ // sveglio la sirena (siccome prima era spenta)
-            //g.stato=SIREN;
-            //g.b_siren--;
-      xSemaphoreGive(s_siren);
-      xSemaphoreGive(s_LED);
-        //}
-		Serial.println("\n----------------------------------------- MOVIMENTO RILEVATO!!! -----------------------------------------\n");
-	}
-
+    g.n_sensor--;
+    if(movement_sensor_value){
+        Serial.println("-------- MOVIMENTO RILEVATO da PIR!!! -----------");
+        if (g.stato==ALARM_ON){ // se c'è movimento e l'allarme è ON (e non triggered quindi)
+            g.stato = ALARM_TRIGGERED;
+            xSemaphoreGive(s_siren);
+            xSemaphoreGive(s_LED);
+            if (g.position!=180) { // se è gia in posizione 180 sta gia filmando quindi non serve svegliare videocamera
+                g.position=180; // modifica la posizione
+                xSemaphoreGive(s_servo);
+	        }
+        }
+        else if (g.stato == ALARM_TRIGGERED && g.position!=180){ // sveglio il servo per spostare videocamera
+            g.position=180; // modifica la posizione
+            xSemaphoreGive(s_servo);
+        }
+    }
 	xSemaphoreGive(mutex);
 }
+
+void start_window_sensor(void* pvParameters)
+{
+	xSemaphoreTake(mutex, portMAX_DELAY);
+    //Serial.println("Sono lo start_motion_sensor");
+	if (g.stato == ALARM_ON || g.stato == ALARM_TRIGGERED) //deve essere nello stato corretto
+	{
+		xSemaphoreGive(s_motion_sensor);
+        g.n_sensor++;
+		//Serial.println("Sensore finestra parte.");
+	}
+	else {
+        Serial.print("Stato allarme: "); Serial.println(g.stato);
+		Serial.println("START_WINDOW_SENSOR: Sensore finestra si BLOCCA.");
+		g.b_motion_sensor++;
+	}
+	xSemaphoreGive(mutex);
+    xSemaphoreTake(mutex, portMAX_DELAY);
+	xSemaphoreTake(s_motion_sensor, portMAX_DELAY); // mi blocco qui nel caso
+    Serial.println("Sono il window sensor e mi sono sbloccato");
+    xSemaphoreGive(mutex);
+}
+
+void window_sensor()
+{       
+    xSemaphoreTake(mutex, portMAX_DELAY);
+    //Serial.println("Sono il window sensor e mi sono sbloccato");
+	window_sensor_value = digitalRead(WINDOW_PIN); // shared variable, uso mutex
+    Serial.print("Window sensor value:");
+    Serial.print(window_sensor_value);
+    Serial.print(" - n_sensor: ");
+    Serial.println(g.n_sensor);
+    xSemaphoreGive(mutex);
+}
+
+void end_window_sensor(void* pvParameters)
+{
+    //vTaskDelay(50 / portTICK_PERIOD_MS); 
+    xSemaphoreTake(mutex, portMAX_DELAY);
+    g.n_sensor--;
+    if(!window_sensor_value){
+        Serial.println("-------- MOVIMENTO RILEVATO da finestra!!! -----------");
+        if (g.stato==ALARM_ON){ // se c'è movimento e l'allarme è ON (e non triggered quindi)
+            g.stato = ALARM_TRIGGERED;
+            xSemaphoreGive(s_siren);
+            xSemaphoreGive(s_LED);
+            if (g.position!=0) { // se è gia in posizione 180 sta gia filmando quindi non serve svegliare videocamera
+                g.position=0; // modifica la posizione
+                xSemaphoreGive(s_servo);
+	        }
+        }
+        else if (g.stato == ALARM_TRIGGERED && g.position!=0){ // sveglio il servo per spostare videocamera
+            g.position=0; // modifica la posizione
+            xSemaphoreGive(s_servo);
+        }
+    }
+	xSemaphoreGive(mutex);
+}
+
+void start_servo(void* pvParameters)
+{
+	xSemaphoreTake(s_servo, portMAX_DELAY); // mi blocco qui aspettando che mi svegliano i due sensori (nella loro END)
+    Serial.println("Il servo si è svegliato!");
+}
+
+void servo(){
+  xSemaphoreTake(mutex, portMAX_DELAY);
+      myservo.write(g.position);    // applico la rotazione della cam (non so se aspetta i tempo di rotazione prima di rilasciare il mutex)
+  xSemaphoreGive(mutex);
+}
+
+
+
 
 void start_siren(void* pvParameters)
 {
@@ -291,26 +363,6 @@ void start_siren(void* pvParameters)
 	}
 	xSemaphoreGive(mutex);
 }
-
-
-// Lettura di var. condivise fuori dal mutex?
-/*
-void siren(){
- // A duration can be specified, otherwise the wave continues until a call to noTone(). 
- if(!g.alarm_triggered){ // la sirena è accesa, sono stato svegliato dal task STAMP per spegnerla (oppure, nelle seguenti implementazioni anche da un timer, che quando scade dice di finire di suonare)
-    noTone(BUZZER_PIN);
-    xSemaphoreTake(mutex, portMAX_DELAY); // race condition
-    g.siren=false;
-    xSemaphoreGive(mutex);
- }
- else{ // la sirena è spenta, sono stato svegliato dal task sensore_movimento perché devo accenderla
-    tone(BUZZER_PIN, 1000); 
-    xSemaphoreTake(mutex, portMAX_DELAY); // race condition
-    g.siren=true;
-    xSemaphoreGive(mutex);
- }
-}
-*/
 
 void statusLED(void *pvParameters) {
     xSemaphoreTake(s_LED, portMAX_DELAY);
@@ -333,16 +385,18 @@ void statusLED(void *pvParameters) {
 void setup()
 {
 	pinMode(MOTION_SENSOR_PIN, INPUT);
-    Serial.begin(19200);
+    Serial.begin(9600);
     Serial.println("Inizio il setup");
     Serial.println("No delays");
-
+    myservo.attach(SERVO_PIN); // pin 9
+    g.position=90; // i due sensori devono stare a posizione 180 (pir) e 0 (window), e lo stato iniziale sarà a metà.
+    myservo.write(g.position);
     //g.stato = PIN;
     // g.alarm=false;
     // g.siren=false;
 	// g.alarm_triggered = false;
     g.stato = ALARM_OFF;
-	g.b_motion_sensor = false;
+	g.b_motion_sensor = 0;
 
     // inizializzo i pin
     for (int k = 0; k > LENGTH_PIN; k++)
@@ -367,6 +421,7 @@ void setup()
     }
 	s_motion_sensor = xSemaphoreCreateBinary();
     s_siren = xSemaphoreCreateBinary();
+    s_servo = xSemaphoreCreateBinary();
     if (s_LED == NULL)
     {
         s_LED = xSemaphoreCreateBinary();
@@ -385,6 +440,14 @@ void setup()
 
 	xTaskCreate(
 		taskMotionSensor, "task-motion-sensor", 256, NULL, 1 // priority
+		,
+		NULL);
+    xTaskCreate(
+		taskWindow, "task-window-sensor", 256, NULL, 1 // priority
+		,
+		NULL);
+    xTaskCreate(
+		taskServo, "task-servo", 256, NULL, 1 // priority
 		,
 		NULL);
     xTaskCreate(
@@ -407,11 +470,7 @@ void taskStamp(void *pvParameters) // This is a task.
 
     for (;;)
     {
-        //start_stamp(pvParameters);
-        //vTaskDelay(20 / portTICK_PERIOD_MS); // wait for one second
         stamp();
-        //vTaskDelay(20 / portTICK_PERIOD_MS);
-        //end_stamp(pvParameters);
     }
 }
 
@@ -421,7 +480,7 @@ void taskPin(void *pvParameters)
     for (;;)
     {
         get_pin();
-        //vTaskDelay(50 / portTICK_PERIOD_MS); // wait for one second
+        taskYIELD();
         end_pin(pvParameters);
         taskYIELD();
     }
@@ -433,10 +492,10 @@ void taskMotionSensor(void* pvParameters)
 	//Serial.begin(4800);
 	for (;;)
 	{
+        //vTaskDelay(50 / portTICK_PERIOD_MS); 
 		start_motion_sensor(pvParameters);
-		//vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
+        taskYIELD();
 		motion_sensor();
-		//vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
         end_motion_sensor(pvParameters);
         taskYIELD();
 	}
@@ -449,11 +508,32 @@ void taskSiren(void* pvParameters)
 	for (;;)
 	{
 		start_siren(pvParameters);
-		//vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
-		//siren();
-		//vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
-
 	}
+}
+
+void taskWindow(void *pvParameters) // This is a task.
+{
+    (void)pvParameters;
+
+    for (;;)
+    {
+        start_window_sensor(pvParameters);
+        taskYIELD();
+        window_sensor();
+        end_window_sensor(pvParameters);
+        taskYIELD();
+    }
+}
+void taskServo(void *pvParameters) // This is a task.
+{
+    (void)pvParameters;
+
+    for (;;)
+    {
+        Serial.println("Servo");
+        start_servo(pvParameters);
+        servo();
+    }
 }
 
 void taskLED(void *pvParameters)
