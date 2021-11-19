@@ -1,8 +1,23 @@
-//#include <Arduino_FreeRTOS.h>
-//#include "FreeRTOSConfig.h"
-//#include "freertos/FreeRTOS.h"
-//#include <semphr.h>
+#include "Secrets.h"
+
 #include <Keypad.h>
+
+#define BLYNK_TEMPLATE_ID SECRET_BLYNK_TEMPLATE_ID 
+#define BLYNK_DEVICE_NAME SECRET_BLYNK_DEVICE_NAME 
+#define BLYNK_AUTH_TOKEN SECRET_BLYNK_AUTH_TOKEN 
+
+// Comment this out to disable prints and save space
+#define BLYNK_PRINT Serial
+
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+
+char auth[] = BLYNK_AUTH_TOKEN;
+
+// WiFi credentials.
+char ssid[] = SECRET_SSID;
+char pass[] = SECRET_PSW;
 
 #define INCLUDE_vTaskSuspend 1
 
@@ -56,6 +71,10 @@ Keypad customKeypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS)
 char true_system_pin[4] = {'0', '0', '0', '0'}; // password giusta del sistema
 char user_pin[LENGTH_PIN]; // password inserita dall'utente
 int index_pin; // indice per gestire user_pin
+
+// Blynk setup
+BlynkTimer timer;
+WidgetLED led1(V0);
 
 // Struttura dati con all'interno gli stati e i bloccati
 struct gestore
@@ -272,7 +291,6 @@ void start_siren(void* pvParameters)
 	if (g.stato == ALARM_TRIGGERED) //deve essere nello stato corretto
 	{
 		Serial.println("---------------------------- SIRENA ACCESA ----------------------------!!!");
-
 		//tone(BUZZER_PIN, 1000); // Volendo si può usare la PWM per modificare il tono.
     digitalWrite(BUZZER_PIN, HIGH);
 	}
@@ -294,30 +312,58 @@ void statusLED(void *pvParameters) {
     // - lo stato ALARM_OFF che accende la luce blu;
     // - lo stato ALARM_ON che accende la luce verde;
     // - lo stato ALARM_TRIGGERED che accende la luce rossa;
+
     xSemaphoreTake(mutex, portMAX_DELAY);
+    int stato = g.stato;
+    xSemaphoreGive(mutex);
+
     digitalWrite(RED_LED, LOW);
     digitalWrite(BLUE_LED, LOW);
     digitalWrite(GREEN_LED, LOW);
-    digitalWrite(g.stato, HIGH);
-    xSemaphoreGive(mutex);
+    digitalWrite(stato, HIGH);
+    
+    switch (stato)
+    {
+    case ALARM_OFF:
+        Blynk.setProperty(V0, "color", "#0000ff");
+        Blynk.setProperty(V0, "label", "ALARM OFF");
+        break;
+    
+    case ALARM_ON:
+        Blynk.setProperty(V0, "color", "#00ff00");
+        Blynk.setProperty(V0, "label", "ALARM ON");
+        break;
+    
+    case ALARM_TRIGGERED:
+        Blynk.setProperty(V0, "color", "#ff0000");
+        Blynk.setProperty(V0, "label", "ALARM TRIGGERED");
+        Blynk.logEvent("ALARM_TRIGGERED");
+        break;
+    }
 }
+
+
+BLYNK_CONNECTED()
+{
+  Serial.println("Connected");
+}
+
+
 
 void setup()
 {
 	pinMode(MOTION_SENSOR_PIN, INPUT);
-  pinMode(BUZZER_PIN, OUTPUT);
-  pinMode(RED_LED, OUTPUT);
-  pinMode(GREEN_LED, OUTPUT);
-  pinMode(BLUE_LED, OUTPUT);
+    pinMode(BUZZER_PIN, OUTPUT);
+    pinMode(RED_LED, OUTPUT);
+    pinMode(GREEN_LED, OUTPUT);
+    pinMode(BLUE_LED, OUTPUT);
   
-    Serial.begin(2400);
+    Serial.begin(115200);
     Serial.println("Inizio il setup");
-    Serial.println("No delays");
 
-    //g.stato = PIN;
-    // g.alarm=false;
-    // g.siren=false;
-	// g.alarm_triggered = false;
+    // Begin WiFi and Blynk connection
+    Blynk.begin(auth, ssid, pass);
+
     g.stato = ALARM_OFF;
 	g.b_motion_sensor = false;
 
@@ -398,6 +444,12 @@ void setup()
     // Prima accensione del LED
     xSemaphoreGive(s_LED);
     Serial.println("Fine setup.");
+
+    // Accensione LED su Blynk
+    led1.on();
+
+    Blynk.run();
+    timer.run();
 
     // Delete "setup and loop" task
     vTaskDelete(NULL);
