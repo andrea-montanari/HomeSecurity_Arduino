@@ -419,7 +419,7 @@ void setup()
     {
         s_stamp = xSemaphoreCreateBinary();
     }
-	s_motion_sensor = xSemaphoreCreateBinary();
+	s_motion_sensor = xSemaphoreCreateCounting( 2, 0 ); // è un semaforo per 2 sensori
     s_siren = xSemaphoreCreateBinary();
     s_servo = xSemaphoreCreateBinary();
     if (s_LED == NULL)
@@ -480,7 +480,7 @@ void taskPin(void *pvParameters)
     for (;;)
     {
         get_pin();
-        taskYIELD();
+        //taskYIELD();
         end_pin(pvParameters);
         taskYIELD();
     }
@@ -494,7 +494,7 @@ void taskMotionSensor(void* pvParameters)
 	{
         //vTaskDelay(50 / portTICK_PERIOD_MS); 
 		start_motion_sensor(pvParameters);
-        taskYIELD();
+        //taskYIELD();
 		motion_sensor();
         end_motion_sensor(pvParameters);
         taskYIELD();
@@ -518,7 +518,7 @@ void taskWindow(void *pvParameters) // This is a task.
     for (;;)
     {
         start_window_sensor(pvParameters);
-        taskYIELD();
+        //taskYIELD();
         window_sensor();
         end_window_sensor(pvParameters);
         taskYIELD();
