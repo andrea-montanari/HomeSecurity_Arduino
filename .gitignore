@@ -5,3 +5,5 @@
 **/*.sln
 **/*vscode*/*
 **/release/*
+**/Secrets.h
+**/build/**
