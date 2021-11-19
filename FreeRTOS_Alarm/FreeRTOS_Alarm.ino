@@ -301,7 +301,6 @@ void statusLED(void *pvParameters) {
     xSemaphoreGive(mutex);
 }
 
-
 void setup()
 {
 	pinMode(MOTION_SENSOR_PIN, INPUT);
@@ -403,14 +402,6 @@ void setup()
     vTaskDelete(NULL);
 }
 
-
-// Funziona per avere il nome del task corrente
-void getTaskName(char* name)
-{
-  strcpy(name, pxCurrentTCB->taskname);
-}  
-
-char ptrTaskList[250];
 
 void taskStamp(void *pvParameters) // This is a task.
 {
