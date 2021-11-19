@@ -120,14 +120,9 @@ void print_user_pin()
     {
         Serial.print(user_pin[k]);
     }
-    Serial.print('\n');
+    if(index_pin>0)Serial.print('\n');
 }
 
-// usate per debug, per capire quando allarme è on e quando è off
-void print_alarm_state(){
-    // if(g.alarm)Serial.println("Alarm On");
-    // else Serial.println("Alarm Off");
-}
 
 
 void get_pin()
@@ -203,7 +198,7 @@ void stamp()
         }
         //init_pin(&index_pin); // rinizializzo il pin
 
-        for (int k = 0; k > LENGTH_PIN; k++)
+        for (int k = 0; k < LENGTH_PIN; k++)
         {
             user_pin[k] = -1;
         }
@@ -232,10 +227,8 @@ void start_motion_sensor(void* pvParameters)
 	}
 	xSemaphoreGive(mutex);
 
-    xSemaphoreTake(mutex, portMAX_DELAY);
 	xSemaphoreTake(s_motion_sensor, portMAX_DELAY); // mi blocco qui nel caso
-    Serial.println("Sono il motion sensor e mi sono sbloccato");
-    xSemaphoreGive(mutex);
+
 }
 
 void motion_sensor()
@@ -243,10 +236,6 @@ void motion_sensor()
     xSemaphoreTake(mutex, portMAX_DELAY);
     //Serial.println("Sono il motion sensor e mi sono sbloccato");
 	movement_sensor_value = digitalRead(MOTION_SENSOR_PIN); // shared variable, uso mutex
-    Serial.print("PIR value:");
-    Serial.print(movement_sensor_value);
-    Serial.print(" - n_sensor: ");
-    Serial.println(g.n_sensor);
     xSemaphoreGive(mutex);
 }
 
@@ -290,10 +279,9 @@ void start_window_sensor(void* pvParameters)
 		g.b_motion_sensor++;
 	}
 	xSemaphoreGive(mutex);
-    xSemaphoreTake(mutex, portMAX_DELAY);
+
 	xSemaphoreTake(s_motion_sensor, portMAX_DELAY); // mi blocco qui nel caso
-    Serial.println("Sono il window sensor e mi sono sbloccato");
-    xSemaphoreGive(mutex);
+
 }
 
 void window_sensor()
@@ -301,10 +289,6 @@ void window_sensor()
     xSemaphoreTake(mutex, portMAX_DELAY);
     //Serial.println("Sono il window sensor e mi sono sbloccato");
 	window_sensor_value = digitalRead(WINDOW_PIN); // shared variable, uso mutex
-    Serial.print("Window sensor value:");
-    Serial.print(window_sensor_value);
-    Serial.print(" - n_sensor: ");
-    Serial.println(g.n_sensor);
     xSemaphoreGive(mutex);
 }
 
