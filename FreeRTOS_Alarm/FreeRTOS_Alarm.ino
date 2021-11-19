@@ -1,24 +1,32 @@
-#include <Arduino_FreeRTOS.h>
-#include "FreeRTOSConfig.h"
-#include <semphr.h>
+//#include <Arduino_FreeRTOS.h>
+//#include "FreeRTOSConfig.h"
+//#include "freertos/FreeRTOS.h"
+//#include <semphr.h>
 #include <Keypad.h>
 
 #define INCLUDE_vTaskSuspend 1
 
 //#define PIETRO 42 // togli se sei monta
+#define ESP32
 
 // stati
-#define ALARM_ON 2
-#define ALARM_OFF 3
-#define ALARM_TRIGGERED 4
+#define ALARM_ON 19
+#define ALARM_OFF 18
+#define ALARM_TRIGGERED 21
+
+// LED RGB
+#define GREEN_LED 19
+#define BLUE_LED 18
+#define RED_LED 21
 
 // lunghezza PIN
 #define LENGTH_PIN 4
-#define MOTION_SENSOR_PIN 31
-#define BUZZER_PIN 29
+#define MOTION_SENSOR_PIN 25
+#define BUZZER_PIN 33
 
 #define MAX_COLOR_INTENSITY 255
 #define MIN_COLOR_INTENSITY 0
+#define noTone 0
 
 // Setup del keypad
 const byte ROWS = 4; //four rows
@@ -29,15 +37,16 @@ char hexaKeys[ROWS][COLS] = { // Per il Pin
     {'4', '5', '6', 'B'},
     {'7', '8', '9', 'C'},
     {'*', '0', '#', 'D'}};
-    
+
 #ifdef PIETRO
  // PIN associati al keypad pietro
 byte rowPins[ROWS] = {9, 8, 7, 6}; //connect to the row pinouts of the keypad 
 byte colPins[COLS] = {5, 4, 3, 2}; //connect to the column pinouts of the keypad
-#else
+#endif
+#ifdef ESP32
  // PIN associati al keypad monta
-byte rowPins[ROWS] = {39, 41, 43, 45}; //connect to the row pinouts of the keypad
-byte colPins[COLS] = {47, 49, 51, 53}; //connect to the column pinouts of the keypad
+byte rowPins[ROWS] = {23, 22, 5, 17}; //connect to the row pinouts of the keypad
+byte colPins[COLS] = {16, 4, 26, 27}; //connect to the column pinouts of the keypad
 #endif
 
 // inizializzazione del keypad
@@ -70,6 +79,7 @@ SemaphoreHandle_t s_stamp = NULL;
 SemaphoreHandle_t s_motion_sensor = NULL;
 SemaphoreHandle_t s_siren = NULL;
 SemaphoreHandle_t s_LED = NULL;
+
 
 
 void taskPin(void *pvParameters);
@@ -117,15 +127,10 @@ void print_alarm_state(){
     // else Serial.println("Alarm Off");
 }
 
-/**
- * Funzioni usate per la sincronizzazione dei task (preambolo e postambolo)
- */
-
 
 void get_pin()
 {   
     //Serial.println("Sono la get_pin - stato: "+String(g.stato));
-    Serial.println("-------");
     char customKey = customKeypad.getKey();
     
     if(customKey){
@@ -151,19 +156,6 @@ void end_pin(void *pvParameters)
     xSemaphoreGive(mutex);
 }
 
-// void start_stamp(void *pvParameters)
-// {
-//     xSemaphoreTake(mutex, (TickType_t)100);
-//     //Serial.println("Sono lo start_stamp");
-//     if (g.stato == STAMP)
-//     {
-//         xSemaphoreGive(s_stamp);
-//     }
-//     else
-//         g.b_stamp++;
-//     xSemaphoreGive(mutex);
-//     xSemaphoreTake(s_stamp, (TickType_t)100); // mi blocco qui nel caso
-// }
 
 // Qui la stampa è fatta su seriale (potremmo mantenerlo come un task a parte(?))
 // Importante perchè qui si modificano i vari stati dell'allarme, e si svegliano anche dei task (sirena)
@@ -238,11 +230,11 @@ void start_motion_sensor(void* pvParameters)
 	if (g.stato == ALARM_ON || g.stato == ALARM_TRIGGERED) //deve essere nello stato corretto
 	{
 		xSemaphoreGive(s_motion_sensor);
-		Serial.println("Sensore di movimento parte.");
+		//Serial.println("Sensore di movimento parte.");
 	}
 	else {
         Serial.print("Stato allarme: "); Serial.println(g.stato);
-		Serial.println("START_MOTION_SENSOR: Sensore di movimento si BLOCCA.");
+		//Serial.println("START_MOTION_SENSOR: Sensore di movimento si BLOCCA.");
 		g.b_motion_sensor++;
 	}
 	xSemaphoreGive(mutex);
@@ -252,23 +244,20 @@ void start_motion_sensor(void* pvParameters)
 void motion_sensor()
 {   //Serial.println("sono lo motion_sensor");
     xSemaphoreTake(mutex, portMAX_DELAY);
-	movement_sensor_value = digitalRead(MOTION_SENSOR_PIN); // shared variable, uso mutex
+	  movement_sensor_value = digitalRead(MOTION_SENSOR_PIN); // shared variable, uso mutex
+    Serial.print("-- Valore sensore di movimento: "); Serial.println(movement_sensor_value);
     xSemaphoreGive(mutex);
 }
 
 void end_motion_sensor(void* pvParameters)
 {
-	//Serial.println("END_MOTION_SENSOR: Nessun movimento");
+	Serial.println("END_MOTION_SENSOR: Nessun movimento");
 	xSemaphoreTake(mutex, portMAX_DELAY);
-    //Serial.println("Sono end_motion_sensor");
+  Serial.println("Sono end_motion_sensor");
   if (movement_sensor_value && g.stato == ALARM_ON) { 
-		  g.stato = ALARM_TRIGGERED;
-        //if (!g.siren && g.b_siren){ // sveglio la sirena (siccome prima era spenta)
-            //g.stato=SIREN;
-            //g.b_siren--;
-      xSemaphoreGive(s_siren);
-      xSemaphoreGive(s_LED);
-        //}
+		g.stato = ALARM_TRIGGERED;
+    xSemaphoreGive(s_siren);
+    xSemaphoreGive(s_LED);
 		Serial.println("\n----------------------------------------- MOVIMENTO RILEVATO!!! -----------------------------------------\n");
 	}
 
@@ -279,53 +268,37 @@ void start_siren(void* pvParameters)
 {
 	xSemaphoreTake(s_siren, portMAX_DELAY);
     xSemaphoreTake(mutex, portMAX_DELAY);
-    //Serial.println("Sono lo start_motion_sensor");
+    Serial.println("Sono lo start_motion_sensor");
 	if (g.stato == ALARM_TRIGGERED) //deve essere nello stato corretto
 	{
 		Serial.println("---------------------------- SIRENA ACCESA ----------------------------!!!");
-		tone(BUZZER_PIN, 1000);
+
+		//tone(BUZZER_PIN, 1000); // Volendo si può usare la PWM per modificare il tono.
+    digitalWrite(BUZZER_PIN, HIGH);
 	}
 	else {
 		Serial.println("---------------------------- SIRENA ACCESA ----------------------------!!!");
-		noTone(BUZZER_PIN);
+		digitalWrite(BUZZER_PIN, LOW);
 	}
 	xSemaphoreGive(mutex);
 }
 
 
-// Lettura di var. condivise fuori dal mutex?
-/*
-void siren(){
- // A duration can be specified, otherwise the wave continues until a call to noTone(). 
- if(!g.alarm_triggered){ // la sirena è accesa, sono stato svegliato dal task STAMP per spegnerla (oppure, nelle seguenti implementazioni anche da un timer, che quando scade dice di finire di suonare)
-    noTone(BUZZER_PIN);
-    xSemaphoreTake(mutex, portMAX_DELAY); // race condition
-    g.siren=false;
-    xSemaphoreGive(mutex);
- }
- else{ // la sirena è spenta, sono stato svegliato dal task sensore_movimento perché devo accenderla
-    tone(BUZZER_PIN, 1000); 
-    xSemaphoreTake(mutex, portMAX_DELAY); // race condition
-    g.siren=true;
-    xSemaphoreGive(mutex);
- }
-}
-*/
-
 void statusLED(void *pvParameters) {
     xSemaphoreTake(s_LED, portMAX_DELAY);
     // Critical section da tenere?
+    // Trovare una logica migliore? Spegnere solo il led che era acceso prima?
     // Mettere fuori solo le prime 3 write?
-    xSemaphoreTake(mutex, portMAX_DELAY);
     // Lo stato viene usato per indicare i pin da accendere. 
     // I collegamenti sono fatti in modo da avere:
     // - lo stato ALARM_OFF che accende la luce blu;
     // - lo stato ALARM_ON che accende la luce verde;
     // - lo stato ALARM_TRIGGERED che accende la luce rossa;
-    analogWrite(ALARM_OFF, MIN_COLOR_INTENSITY);
-    analogWrite(ALARM_ON, MIN_COLOR_INTENSITY);
-    analogWrite(ALARM_TRIGGERED, MIN_COLOR_INTENSITY);
-    analogWrite(g.stato, MAX_COLOR_INTENSITY);
+    xSemaphoreTake(mutex, portMAX_DELAY);
+    digitalWrite(RED_LED, LOW);
+    digitalWrite(BLUE_LED, LOW);
+    digitalWrite(GREEN_LED, LOW);
+    digitalWrite(g.stato, HIGH);
     xSemaphoreGive(mutex);
 }
 
@@ -333,7 +306,12 @@ void statusLED(void *pvParameters) {
 void setup()
 {
 	pinMode(MOTION_SENSOR_PIN, INPUT);
-    Serial.begin(19200);
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(RED_LED, OUTPUT);
+  pinMode(GREEN_LED, OUTPUT);
+  pinMode(BLUE_LED, OUTPUT);
+  
+    Serial.begin(2400);
     Serial.println("Inizio il setup");
     Serial.println("No delays");
 
@@ -373,33 +351,67 @@ void setup()
     }
 
     // Controlla se funziona anche dandogli meno stack-size (es.128)
-    xTaskCreate(
-        taskStamp, "task-stamp", 256, NULL, 1 // priority  
-        ,
-        NULL);
 
-    xTaskCreate(
-        taskPin, "task-pin", 256, NULL, 1 // priority
-        ,
-        NULL);
+    
+    xTaskCreatePinnedToCore(
+        taskStamp, 
+        "task-stamp", 
+        20000, // task overhead: 768 bytes (?)
+        NULL, 
+        0, // priority  
+        NULL,
+        0); // Core
 
-	xTaskCreate(
-		taskMotionSensor, "task-motion-sensor", 256, NULL, 1 // priority
-		,
-		NULL);
-    xTaskCreate(
-		taskSiren, "task-siren", 256, NULL, 1 // priority
-		,
-		NULL);
-    xTaskCreate(
-		taskLED, "task-LED", 256, NULL, 1 // priority
-		,
-		NULL);
+    xTaskCreatePinnedToCore(
+        taskPin, 
+        "task-pin",
+        20000, 
+        NULL, 
+        0, // priority  
+        NULL,
+        0);
+
+	xTaskCreatePinnedToCore(
+		taskMotionSensor, 
+        "task-motion-sensor", 
+        20000, 
+        NULL, 
+        0, // priority  
+        NULL,
+        0);
+    xTaskCreatePinnedToCore(
+		taskSiren, 
+        "task-siren",
+        20000, 
+        NULL, 
+        0, // priority  
+        NULL,
+        0);
+    xTaskCreatePinnedToCore(
+		taskLED, 
+        "task-LED", 
+        10000, 
+        NULL, 
+        0, // priority  
+        NULL,
+        0);
 
     // Prima accensione del LED
     xSemaphoreGive(s_LED);
-        
+    Serial.println("Fine setup.");
+
+    // Delete "setup and loop" task
+    vTaskDelete(NULL);
 }
+
+
+// Funziona per avere il nome del task corrente
+void getTaskName(char* name)
+{
+  strcpy(name, pxCurrentTCB->taskname);
+}  
+
+char ptrTaskList[250];
 
 void taskStamp(void *pvParameters) // This is a task.
 {
@@ -410,6 +422,10 @@ void taskStamp(void *pvParameters) // This is a task.
         //start_stamp(pvParameters);
         //vTaskDelay(20 / portTICK_PERIOD_MS); // wait for one second
         stamp();
+        xSemaphoreTake(mutex, portMAX_DELAY);
+        Serial.print("Stack della stampa: "); Serial.println(uxTaskGetStackHighWaterMark(NULL));
+        xSemaphoreGive(mutex);
+        taskYIELD();
         //vTaskDelay(20 / portTICK_PERIOD_MS);
         //end_stamp(pvParameters);
     }
@@ -423,6 +439,9 @@ void taskPin(void *pvParameters)
         get_pin();
         //vTaskDelay(50 / portTICK_PERIOD_MS); // wait for one second
         end_pin(pvParameters);
+        xSemaphoreTake(mutex, portMAX_DELAY);
+        Serial.print("Stack del PIN: "); Serial.println(uxTaskGetStackHighWaterMark(NULL));
+        xSemaphoreGive(mutex);
         taskYIELD();
     }
 }
@@ -437,8 +456,9 @@ void taskMotionSensor(void* pvParameters)
 		//vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
 		motion_sensor();
 		//vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
-        end_motion_sensor(pvParameters);
-        taskYIELD();
+    end_motion_sensor(pvParameters);
+    Serial.print("Stack del motion sensor: "); Serial.println(uxTaskGetStackHighWaterMark(NULL));
+    taskYIELD();
 	}
 }
 
@@ -449,6 +469,7 @@ void taskSiren(void* pvParameters)
 	for (;;)
 	{
 		start_siren(pvParameters);
+    Serial.print("Stack della sirena: "); Serial.println(uxTaskGetStackHighWaterMark(NULL));
 		//vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
 		//siren();
 		//vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
@@ -462,6 +483,7 @@ void taskLED(void *pvParameters)
     for (;;)
     {
         statusLED(pvParameters);
+        Serial.print("Stack del LED: "); Serial.println(uxTaskGetStackHighWaterMark(NULL));
     }
 }
 
