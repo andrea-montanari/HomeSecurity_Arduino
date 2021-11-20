@@ -1,19 +1,15 @@
 #include "Secrets.h"
+#define BLYNK_TEMPLATE_ID SECRET_BLYNK_TEMPLATE_ID
+#define BLYNK_DEVICE_NAME SECRET_BLYNK_DEVICE_NAME
+#define BLYNK_AUTH_TOKEN SECRET_BLYNK_AUTH_TOKEN
+#define BLYNK_PRINT Serial
+
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <BlynkSimpleEsp32.h>
 #include <ESP32Servo.h>
 #include <Keypad.h>
 
-#define BLYNK_TEMPLATE_ID SECRET_BLYNK_TEMPLATE_ID
-#define BLYNK_DEVICE_NAME SECRET_BLYNK_DEVICE_NAME
-#define BLYNK_AUTH_TOKEN SECRET_BLYNK_AUTH_TOKEN
-
-// HO COMMENTATO LE RIGHE RIGUARDANTI BLYNK IN QUANTO PER ORA NON MI FUNZIONA SE LE LASCIO
-// E ho commentato le stampe degli stack
-
-// Comment this out to disable prints and save space
-#define BLYNK_PRINT Serial
 
 char auth[] = BLYNK_AUTH_TOKEN;
 
@@ -78,7 +74,12 @@ int index_pin;                                  // indice per gestire user_pin
 
 // Blynk setup
 BlynkTimer timer;
-WidgetLED led1(V0);
+WidgetLED led_alarm_blynk(V0);
+WidgetLED led_pir_blynk(V1);
+WidgetLED led_window_blynk(V2);
+
+
+
 
 // Struttura dati con all'interno gli stati e i bloccati
 struct gestore
@@ -270,6 +271,10 @@ void end_motion_sensor(void *pvParameters)
     if (movement_sensor_value)
     {
         Serial.println("-------- MOVIMENTO RILEVATO da PIR!!! -----------");
+        // invio segno che è stato triggerato anche sull'app (inviando anche notifica)
+        Blynk.setProperty(V1, "color", "#ff0000");
+        Blynk.setProperty(V1, "label", "PIR TRIGGERED");
+        Blynk.logEvent("PIR sensor has been triggered!");
         if (g.stato == ALARM_ON)
         { // se c'è movimento e l'allarme è ON (e non triggered quindi)
             g.stato = ALARM_TRIGGERED;
@@ -325,6 +330,10 @@ void end_window_sensor(void* pvParameters)
     xSemaphoreTake(mutex, portMAX_DELAY);
     if(!window_sensor_value){
         Serial.println("-------- MOVIMENTO RILEVATO da finestra!!! -----------");
+        // invio segno che è stato triggerato anche sull'app (inviando anche notifica)
+        Blynk.setProperty(V2, "color", "#ff0000");
+        Blynk.setProperty(V2, "label", "Window OPENED");
+        Blynk.logEvent("The window has been opened!");
         if (g.stato==ALARM_ON){ // se c'è movimento e l'allarme è ON (e non triggered quindi)
             g.stato = ALARM_TRIGGERED;
             xSemaphoreGive(s_siren);
@@ -352,6 +361,7 @@ void start_servo(void* pvParameters)
 void servo(){
   xSemaphoreTake(mutex, portMAX_DELAY);
       myservo.write(g.position);    // applico la rotazione della cam (non so se aspetta i tempo di rotazione prima di rilasciare il mutex)
+      Blynk.virtualWrite(V3,g.position); // scrivo il valore della rotazione sulla app blynk
   xSemaphoreGive(mutex);
 }
 
@@ -395,12 +405,16 @@ void statusLED(void *pvParameters)
     digitalWrite(BLUE_LED, LOW);
     digitalWrite(GREEN_LED, LOW);
     digitalWrite(stato, HIGH);
-    /*
+    
     switch (stato)
     {
     case ALARM_OFF:
         Blynk.setProperty(V0, "color", "#0000ff");
         Blynk.setProperty(V0, "label", "ALARM OFF");
+        Blynk.setProperty(V1, "color", "#00ff00");
+        Blynk.setProperty(V1, "label", "PIR never triggered");
+        Blynk.setProperty(V2, "color", "#00ff00");
+        Blynk.setProperty(V2, "label", "Window never opened");
         break;
     
     case ALARM_ON:
@@ -414,7 +428,7 @@ void statusLED(void *pvParameters)
         Blynk.logEvent("ALARM_TRIGGERED");
         break;
     }
-    */
+    
 }
 
 BLYNK_CONNECTED()
@@ -424,6 +438,8 @@ BLYNK_CONNECTED()
 
 void setup()
 {
+        // Begin WiFi and Blynk connection
+    Blynk.begin(auth, ssid, pass);
     pinMode(MOTION_SENSOR_PIN, INPUT);
     pinMode(BUZZER_PIN, OUTPUT);
     pinMode(RED_LED, OUTPUT);
@@ -437,8 +453,8 @@ void setup()
     myservo.attach(SERVO_PIN); 
     g.position=90; // i due sensori devono stare a posizione 180 (pir) e 0 (window), e lo stato iniziale sarà a metà.
     myservo.write(g.position);
-    // Begin WiFi and Blynk connection
-    //Blynk.begin(auth, ssid, pass);
+    Blynk.virtualWrite(V3,g.position);
+
 
     g.stato = ALARM_OFF;
     g.b_motion_sensor = false;
@@ -538,10 +554,14 @@ void setup()
     Serial.println("Fine setup.");
     
     // Accensione LED su Blynk
-    //led1.on();
+    led_alarm_blynk.on();
+    led_pir_blynk.on();
+    led_window_blynk.on();
 
-    //Blynk.run();
-    //timer.run();
+
+
+    Blynk.run();
+    timer.run();
 
     // Delete "setup and loop" task
     vTaskDelete(NULL);
