@@ -18,8 +18,8 @@
 #define LENGTH_PIN 4
 #define MOTION_SENSOR_PIN 31
 #define BUZZER_PIN 29
-#define SERVO_PIN 9
-#define WINDOW_PIN 13 // pin del bottone 
+#define SERVO_PIN 14
+#define WINDOW_PIN 12 // pin del bottone 
 
 #define MAX_COLOR_INTENSITY 255
 #define MIN_COLOR_INTENSITY 0
@@ -136,7 +136,6 @@ void get_pin()
         index_pin++; //aggiorno index_pin
         xSemaphoreGive(mutex);
         }                     
-    
 }
 
 
