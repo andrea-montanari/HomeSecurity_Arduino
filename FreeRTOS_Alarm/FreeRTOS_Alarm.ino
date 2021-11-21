@@ -113,6 +113,7 @@ void taskSiren(void *pvParameters);
 void taskLED(void *pvParameters);
 void taskWindowSensor(void *pvParameters); // task per il bottone
 void taskServo(void *pvParameters);
+void taskBlynk(void *pvParameters);
 
 /*funzioni di supporto - usate (e anche non ancora usate) per printare o per controllare */
 bool is_pin_valid(char *user_pin, char *true_system_pin)
@@ -274,7 +275,7 @@ void end_motion_sensor(void *pvParameters)
         // invio segno che è stato triggerato anche sull'app (inviando anche notifica)
         Blynk.setProperty(V1, "color", "#ff0000");
         Blynk.setProperty(V1, "label", "PIR TRIGGERED");
-        Blynk.logEvent("PIR sensor has been triggered!");
+        Blynk.logEvent("pir_triggered");
         if (g.stato == ALARM_ON)
         { // se c'è movimento e l'allarme è ON (e non triggered quindi)
             g.stato = ALARM_TRIGGERED;
@@ -333,7 +334,7 @@ void end_window_sensor(void* pvParameters)
         // invio segno che è stato triggerato anche sull'app (inviando anche notifica)
         Blynk.setProperty(V2, "color", "#ff0000");
         Blynk.setProperty(V2, "label", "Window OPENED");
-        Blynk.logEvent("The window has been opened!");
+        Blynk.logEvent("window_opened");
         if (g.stato==ALARM_ON){ // se c'è movimento e l'allarme è ON (e non triggered quindi)
             g.stato = ALARM_TRIGGERED;
             xSemaphoreGive(s_siren);
@@ -406,6 +407,7 @@ void statusLED(void *pvParameters)
     digitalWrite(GREEN_LED, LOW);
     digitalWrite(stato, HIGH);
     
+    
     switch (stato)
     {
     case ALARM_OFF:
@@ -415,6 +417,7 @@ void statusLED(void *pvParameters)
         Blynk.setProperty(V1, "label", "PIR never triggered");
         Blynk.setProperty(V2, "color", "#00ff00");
         Blynk.setProperty(V2, "label", "Window never opened");
+        
         break;
     
     case ALARM_ON:
@@ -428,6 +431,7 @@ void statusLED(void *pvParameters)
         Blynk.logEvent("ALARM_TRIGGERED");
         break;
     }
+    
     
 }
 
@@ -548,24 +552,36 @@ void setup()
         0, // priority
         NULL,
         0);
+    /*    
+    xTaskCreatePinnedToCore(
+        taskBlynk,
+        "task-blynk",
+        10000,
+        NULL,
+        1, // messa con priorità maggiore perchè altrimenti dava problemi con primitiva pbuf_free() e abortiva tutto
+        NULL,
+        0);
+    */   
     
     // Prima accensione del LED
     xSemaphoreGive(s_LED);
     Serial.println("Fine setup.");
     
     // Accensione LED su Blynk
+    
     led_alarm_blynk.on();
     led_pir_blynk.on();
     led_window_blynk.on();
-
+    
 
 
     Blynk.run();
-    timer.run();
+    //timer.run();
 
     // Delete "setup and loop" task
     vTaskDelete(NULL);
 }
+
 
 void taskStamp(void *pvParameters) // This is a task.
 {
@@ -595,7 +611,7 @@ void taskPin(void *pvParameters)
     for (;;)
     {
         get_pin();
-        //vTaskDelay(50 / portTICK_PERIOD_MS); // wait for one second
+        //vTaskDelay(20 / portTICK_PERIOD_MS); // wait for one second
         end_pin(pvParameters);
         /*
         xSemaphoreTake(mutex, portMAX_DELAY);
@@ -614,6 +630,7 @@ void taskMotionSensor(void *pvParameters)
     for (;;)
     {
         start_motion_sensor(pvParameters);
+        //vTaskDelay(30 / portTICK_PERIOD_MS);
         //vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
         motion_sensor();
         //vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
@@ -633,6 +650,7 @@ void taskWindowSensor(void *pvParameters) // This is a task.
     for (;;)
     {
         start_window_sensor(pvParameters);
+        //vTaskDelay(30 / portTICK_PERIOD_MS);
         //taskYIELD();
         window_sensor();
         end_window_sensor(pvParameters);
@@ -675,6 +693,7 @@ void taskLED(void *pvParameters)
     (void)pvParameters;
     for (;;)
     {
+        //vTaskDelay(10 / portTICK_PERIOD_MS);
         statusLED(pvParameters);
         /*
         Serial.print("Stack del LED: ");
@@ -682,6 +701,19 @@ void taskLED(void *pvParameters)
         */
     }
 }
+
+
+void taskBlynk(void *pvParameters)
+{
+    (void)pvParameters;
+    for (;;)
+    {
+        vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
+        Blynk.run();
+        taskYIELD();
+    }
+}
+
 
 void loop()
 {
