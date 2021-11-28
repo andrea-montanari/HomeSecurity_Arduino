@@ -97,6 +97,11 @@ struct gestore
 int movement_sensor_value; // Place to store read PIR Value
 int window_sensor_value;   // store del valore del bottone (che simula una finestra) (qui quando è = 0 è stato triggerato)
 
+
+
+
+
+TaskHandle_t Handle_TaskBlynk;
 // Semafori privati e mutex
 SemaphoreHandle_t mutex = NULL;
 SemaphoreHandle_t s_pin = NULL;
@@ -273,12 +278,12 @@ void end_motion_sensor(void *pvParameters)
     {
         Serial.println("-------- MOVIMENTO RILEVATO da PIR!!! -----------");
         // invio segno che è stato triggerato anche sull'app (inviando anche notifica)
-        Blynk.setProperty(V1, "color", "#ff0000");
-        Blynk.setProperty(V1, "label", "PIR TRIGGERED");
-        Blynk.logEvent("pir_triggered");
         if (g.stato == ALARM_ON)
         { // se c'è movimento e l'allarme è ON (e non triggered quindi)
             g.stato = ALARM_TRIGGERED;
+            Blynk.setProperty(V1, "color", "#ff0000");
+            Blynk.setProperty(V1, "label", "PIR TRIGGERED");
+            Blynk.logEvent("pir_triggered");
             xSemaphoreGive(s_siren);
             xSemaphoreGive(s_LED);
             if (g.position != 180)
@@ -291,6 +296,9 @@ void end_motion_sensor(void *pvParameters)
         {                     // sveglio il servo per spostare videocamera
             g.position = 180; // modifica la posizione
             xSemaphoreGive(s_servo);
+            Blynk.setProperty(V1, "color", "#ff0000");
+            Blynk.setProperty(V1, "label", "PIR TRIGGERED");
+            Blynk.logEvent("pir_triggered");
         }
     }
     xSemaphoreGive(mutex);
@@ -332,11 +340,12 @@ void end_window_sensor(void* pvParameters)
     if(!window_sensor_value){
         Serial.println("-------- MOVIMENTO RILEVATO da finestra!!! -----------");
         // invio segno che è stato triggerato anche sull'app (inviando anche notifica)
-        Blynk.setProperty(V2, "color", "#ff0000");
-        Blynk.setProperty(V2, "label", "Window OPENED");
-        Blynk.logEvent("window_opened");
+
         if (g.stato==ALARM_ON){ // se c'è movimento e l'allarme è ON (e non triggered quindi)
             g.stato = ALARM_TRIGGERED;
+            Blynk.setProperty(V2, "color", "#ff0000");
+            Blynk.setProperty(V2, "label", "Window OPENED");
+            Blynk.logEvent("window_opened");
             xSemaphoreGive(s_siren);
             xSemaphoreGive(s_LED);
             if (g.position!=0) { // se è gia in posizione 180 sta gia filmando quindi non serve svegliare videocamera
@@ -347,6 +356,9 @@ void end_window_sensor(void* pvParameters)
         else if (g.stato == ALARM_TRIGGERED && g.position!=0){ // sveglio il servo per spostare videocamera
             g.position=0; // modifica la posizione
             xSemaphoreGive(s_servo);
+            Blynk.setProperty(V2, "color", "#ff0000");
+            Blynk.setProperty(V2, "label", "Window OPENED");
+            Blynk.logEvent("window_opened");
         }
     }
 	xSemaphoreGive(mutex);
@@ -414,10 +426,9 @@ void statusLED(void *pvParameters)
         Blynk.setProperty(V0, "color", "#0000ff");
         Blynk.setProperty(V0, "label", "ALARM OFF");
         Blynk.setProperty(V1, "color", "#00ff00");
-        Blynk.setProperty(V1, "label", "PIR never triggered");
+        //Blynk.setProperty(V1, "label", "PIR never triggered");
         Blynk.setProperty(V2, "color", "#00ff00");
-        Blynk.setProperty(V2, "label", "Window never opened");
-        
+        //Blynk.setProperty(V2, "label", "Window never opened");
         break;
     
     case ALARM_ON:
@@ -435,15 +446,17 @@ void statusLED(void *pvParameters)
     
 }
 
-BLYNK_CONNECTED()
-{
-    Serial.println("Connected");
-}
 
 void setup()
 {
         // Begin WiFi and Blynk connection
     Blynk.begin(auth, ssid, pass);
+        // Accensione LED su Blynk
+    led_alarm_blynk.on();
+    led_pir_blynk.on();
+    led_window_blynk.on();
+    timer.run();
+
     pinMode(MOTION_SENSOR_PIN, INPUT);
     pinMode(BUZZER_PIN, OUTPUT);
     pinMode(RED_LED, OUTPUT);
@@ -457,7 +470,7 @@ void setup()
     myservo.attach(SERVO_PIN); 
     g.position=90; // i due sensori devono stare a posizione 180 (pir) e 0 (window), e lo stato iniziale sarà a metà.
     myservo.write(g.position);
-    Blynk.virtualWrite(V3,g.position);
+    Blynk.virtualWrite(V3,g.position); // possibile errore('?)
 
 
     g.stato = ALARM_OFF;
@@ -501,7 +514,7 @@ void setup()
         NULL,
         0, // priority
         NULL,
-        0); // Core
+        1); // Core
 
     xTaskCreatePinnedToCore(
         taskPin,
@@ -510,7 +523,7 @@ void setup()
         NULL,
         0, // priority
         NULL,
-        0);
+        1);
 
     xTaskCreatePinnedToCore(
         taskMotionSensor,
@@ -519,7 +532,7 @@ void setup()
         NULL,
         0, // priority
         NULL,
-        0);
+        1);
     xTaskCreatePinnedToCore(
         taskWindowSensor,
         "task-window-sensor",
@@ -527,7 +540,7 @@ void setup()
         NULL,
         0, // priority
         NULL,
-        0);
+        1);
     xTaskCreatePinnedToCore(
         taskSiren,
         "task-siren",
@@ -535,7 +548,7 @@ void setup()
         NULL,
         0, // priority
         NULL,
-        0);
+        1);
     xTaskCreatePinnedToCore(
         taskServo,
         "task-servo",
@@ -543,7 +556,7 @@ void setup()
         NULL,
         0, // priority
         NULL,
-        0);
+        1);
     xTaskCreatePinnedToCore(
         taskLED,
         "task-LED",
@@ -551,32 +564,22 @@ void setup()
         NULL,
         0, // priority
         NULL,
-        0);
-    /*    
+        1);  
     xTaskCreatePinnedToCore(
         taskBlynk,
         "task-blynk",
-        10000,
+        20000,
         NULL,
         1, // messa con priorità maggiore perchè altrimenti dava problemi con primitiva pbuf_free() e abortiva tutto
-        NULL,
+        &Handle_TaskBlynk,
         0);
-    */   
+       
     
     // Prima accensione del LED
     xSemaphoreGive(s_LED);
     Serial.println("Fine setup.");
     
-    // Accensione LED su Blynk
-    
-    led_alarm_blynk.on();
-    led_pir_blynk.on();
-    led_window_blynk.on();
-    
 
-
-    Blynk.run();
-    //timer.run();
 
     // Delete "setup and loop" task
     vTaskDelete(NULL);
@@ -708,14 +711,16 @@ void taskBlynk(void *pvParameters)
     (void)pvParameters;
     for (;;)
     {
-        vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
+        //xSemaphoreTake(mutex, portMAX_DELAY);
         Blynk.run();
-        taskYIELD();
+        //xSemaphoreGive(mutex);
+        //taskYIELD();
+        vTaskDelay(50 / portTICK_PERIOD_MS); // wait for one second
     }
 }
 
 
 void loop()
 {
-    //empty loop
+
 }
