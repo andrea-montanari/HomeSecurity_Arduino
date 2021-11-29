@@ -120,6 +120,25 @@ void taskWindowSensor(void *pvParameters); // task per il bottone
 void taskServo(void *pvParameters);
 void taskBlynk(void *pvParameters);
 
+
+
+BLYNK_WRITE (V4)
+{
+  int position = param.asInt();
+  //xSemaphoreTake(mutex, (TickType_t)100);
+  xSemaphoreTake(mutex, portMAX_DELAY);
+
+  Serial.print("La pozione è: ");
+  Serial.println(position);
+  g.position=position;
+  xSemaphoreGive(s_servo);
+  
+  xSemaphoreGive(mutex);
+}
+
+
+
+
 /*funzioni di supporto - usate (e anche non ancora usate) per printare o per controllare */
 bool is_pin_valid(char *user_pin, char *true_system_pin)
 {
