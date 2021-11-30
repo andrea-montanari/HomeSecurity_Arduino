@@ -39,6 +39,11 @@ char pass[] = SECRET_PSW;
 #define SERVO_PIN 14
 #define WINDOW_PIN 12
 
+// Blynk LCD positions
+#define X_start 0
+#define Y_first_raw 0
+#define Y_second_raw 1
+
 #define MAX_COLOR_INTENSITY 255
 #define MIN_COLOR_INTENSITY 0
 #define noTone 0
@@ -77,9 +82,7 @@ BlynkTimer timer;
 WidgetLED led_alarm_blynk(V0);
 WidgetLED led_pir_blynk(V1);
 WidgetLED led_window_blynk(V2);
-
-
-
+WidgetLCD lcd(V5);
 
 // Struttura dati con all'interno gli stati e i bloccati
 struct gestore
@@ -165,10 +168,19 @@ void init_pin(int *index_pin, int *user_pin)
 // usata per printare solamente fino all'indice a cui siamo arrivati
 void print_user_pin()
 {
+    String lcd_string = "";
+    if (index_pin == 1) {
+        lcd.clear();
+        lcd.print(X_start, Y_first_raw, "PIN inserito:");
+    }
+
     for (int k = 0; k < index_pin; k++)
     {
         Serial.print(user_pin[k]);
+        lcd_string += user_pin[k];
+        Serial.print("Stringa: "); Serial.println(lcd_string);
     }
+    lcd.print(X_start, Y_second_raw, lcd_string);
     if (index_pin > 0)
         Serial.print('\n'); // così si risparmiano delle stampe
 }
@@ -183,6 +195,7 @@ void get_pin()
         xSemaphoreTake(mutex, (TickType_t)100);
         user_pin[index_pin] = customKey; // possibile race conditions su shared variable (per questo usato mutex)
         index_pin++;                     //aggiorno index_pin
+        print_user_pin();
         xSemaphoreGive(mutex);
     }
 }
@@ -196,7 +209,7 @@ void end_pin(void *pvParameters)
 // Importante perchè qui si modificano i vari stati dell'allarme, e si svegliano anche dei task (sirena)
 void stamp()
 {
-    print_user_pin();
+    // print_user_pin();
     //print_alarm_state();
     xSemaphoreTake(s_stamp, (TickType_t)100);
 
@@ -210,6 +223,8 @@ void stamp()
         {
             Serial.print("Il pin inserito è GIUSTO ");
             Serial.println(user_pin);
+            lcd.clear();
+            lcd.print(X_start, Y_first_raw, "PIN corretto");
             // il pin è giusto, quindi bisogna cambiare lo stato dell'allarme: nel caso in cui sia off->on nel caso sia on->off
             // BISOGNERA' FARE REFACTORING, siccome non è ottimale
             if (g.stato == ALARM_ON)
