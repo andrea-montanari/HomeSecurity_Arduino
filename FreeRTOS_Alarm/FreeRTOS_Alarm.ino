@@ -19,9 +19,6 @@ char pass[] = SECRET_PSW;
 
 #define INCLUDE_vTaskSuspend 1
 
-//#define PIETRO 42 // togli se sei monta
-#define ESP32
-
 // stati
 #define ALARM_ON 19
 #define ALARM_OFF 18
@@ -58,16 +55,10 @@ char hexaKeys[ROWS][COLS] = { // Per il Pin
     {'7', '8', '9', 'C'},
     {'*', '0', '#', 'D'}};
 
-#ifdef PIETRO
-// PIN associati al keypad pietro
-byte rowPins[ROWS] = {9, 8, 7, 6}; //connect to the row pinouts of the keypad
-byte colPins[COLS] = {5, 4, 3, 2}; //connect to the column pinouts of the keypad
-#endif
-#ifdef ESP32
     // PIN associati al keypad monta
 byte rowPins[ROWS] = {23, 22, 5, 17}; //connect to the row pinouts of the keypad
 byte colPins[COLS] = {16, 4, 26, 27}; //connect to the column pinouts of the keypad
-#endif
+
 
 // inizializzazione del keypad
 Keypad customKeypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS);
@@ -531,9 +522,18 @@ void setup()
     {
         s_stamp = xSemaphoreCreateBinary();
     }
-    s_motion_sensor = xSemaphoreCreateCounting( 2, 0 ); // è un semaforo per 2 sensori
-    s_servo = xSemaphoreCreateBinary();
-    s_siren = xSemaphoreCreateBinary();
+    if (s_motion_sensor == NULL)
+    {
+        s_motion_sensor = xSemaphoreCreateCounting( 2, 0 ); // è un semaforo per 2 sensori
+    }
+    if (s_servo == NULL)
+    {
+        s_servo = xSemaphoreCreateBinary();
+    }
+    if (s_siren == NULL)
+    {
+        s_siren = xSemaphoreCreateBinary();
+    }
     if (s_LED == NULL)
     {
         s_LED = xSemaphoreCreateBinary();
