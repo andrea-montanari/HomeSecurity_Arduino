@@ -186,14 +186,15 @@ void get_pin()
         xSemaphoreTake(mutex, (TickType_t)100);
         user_pin[index_pin] = customKey; // possibile race conditions su shared variable (per questo usato mutex)
         index_pin++;                     //aggiorno index_pin
-        print_user_pin();
+        //print_user_pin();
         xSemaphoreGive(mutex);
+        xSemaphoreGive(s_stamp);
     }
 }
 
 void end_pin(void *pvParameters)
 {
-    xSemaphoreGive(s_stamp);
+    //xSemaphoreGive(s_stamp);
 }
 
 // Qui la stampa è fatta su seriale (potremmo mantenerlo come un task a parte(?))
@@ -203,8 +204,9 @@ void stamp()
     // print_user_pin();
     //print_alarm_state();
     xSemaphoreTake(s_stamp, (TickType_t)100);
-
+    
     xSemaphoreTake(mutex, (TickType_t)100);
+    print_user_pin();
     if (index_pin == 4)
     {
         bool valid_pin = is_pin_valid(user_pin, true_system_pin); // check del pin con "0000"
