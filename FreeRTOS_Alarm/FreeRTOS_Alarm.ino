@@ -4,6 +4,8 @@
 #define BLYNK_AUTH_TOKEN SECRET_BLYNK_AUTH_TOKEN
 #define BLYNK_PRINT Serial
 
+#include <esp_task_wdt.h>
+
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <BlynkSimpleEsp32.h>
@@ -167,9 +169,9 @@ void print_user_pin()
 
     for (int k = 0; k < index_pin; k++)
     {
-        Serial.print(user_pin[k]);
+        //Serial.print("User pin: "); Serial.println(user_pin[k]);
         lcd_string += user_pin[k];
-        Serial.print("Stringa: "); Serial.println(lcd_string);
+        //Serial.print("Stringa: "); Serial.println(lcd_string);
     }
     lcd.print(X_start, Y_second_raw, lcd_string);
     if (index_pin > 0)
@@ -180,15 +182,21 @@ void get_pin()
 {
     //Serial.println("Sono la get_pin - stato: "+String(g.stato));
     char customKey = customKeypad.getKey();
+    xSemaphoreTake(mutex, portMAX_DELAY);
+
+    xSemaphoreGive(mutex);
 
     if (customKey)
     {
-        xSemaphoreTake(mutex, (TickType_t)100);
+        //Serial.println("Entro nell'if.");
+        xSemaphoreTake(mutex, portMAX_DELAY);
         user_pin[index_pin] = customKey; // possibile race conditions su shared variable (per questo usato mutex)
         index_pin++;                     //aggiorno index_pin
         //print_user_pin();
         xSemaphoreGive(mutex);
+        //Serial.print("Valore semaforo stamp prima della give: "); Serial.println(uxSemaphoreGetCount(s_stamp));
         xSemaphoreGive(s_stamp);
+        //Serial.print("Valore semaforo stamp dopo la give: "); Serial.println(uxSemaphoreGetCount(s_stamp));
     }
 }
 
@@ -203,9 +211,11 @@ void stamp()
 {
     // print_user_pin();
     //print_alarm_state();
-    xSemaphoreTake(s_stamp, (TickType_t)100);
-    
-    xSemaphoreTake(mutex, (TickType_t)100);
+    //Serial.print("Valore semaforo stamp prima della take: "); Serial.println(uxSemaphoreGetCount(s_stamp));
+    xSemaphoreTake(s_stamp, portMAX_DELAY);
+    //Serial.print("Valore semaforo stamp dopo la take: "); Serial.println(uxSemaphoreGetCount(s_stamp));
+    //Serial.println("-- Eseguo la stampa --");
+    xSemaphoreTake(mutex, portMAX_DELAY);
     print_user_pin();
     if (index_pin == 4)
     {
@@ -245,7 +255,7 @@ void stamp()
                 g.stato = ALARM_ON;
                 while (g.b_motion_sensor)
                 {                                                            // siccome ci sono 2 sensori devo svegliarli entrambi
-                    Serial.println("END_STAMP: Sveglio sensore movimento."); // potrebbe essere per questo
+                    //Serial.println("END_STAMP: Sveglio sensore movimento."); // potrebbe essere per questo
                     g.b_motion_sensor--;
                     xSemaphoreGive(s_motion_sensor);
                 }
@@ -303,7 +313,7 @@ void end_motion_sensor(void *pvParameters)
     xSemaphoreTake(mutex, portMAX_DELAY);
     if (movement_sensor_value)
     {
-        Serial.println("-------- MOVIMENTO RILEVATO da PIR!!! -----------");
+        //Serial.println("-------- MOVIMENTO RILEVATO da PIR!!! -----------");
         // invio segno che è stato triggerato anche sull'app (inviando anche notifica)
         if (g.stato == ALARM_ON)
         { // se c'è movimento e l'allarme è ON (e non triggered quindi)
@@ -476,8 +486,17 @@ void statusLED(void *pvParameters)
 
 void setup()
 {
+    // Setting idle watchdog to 30s and disabling the controller reset if triggered
+    // esp_task_wdt_init(999999999, false);
+
+    // Unsubscribe idle task from the Task Watchdog Timer
+    // TaskHandle_t idleTaskHandle = xTaskGetCurrentTaskHandle();
+    esp_task_wdt_delete(xTaskGetCurrentTaskHandle());
+    
+    
         // Begin WiFi and Blynk connection
     Blynk.begin(auth, ssid, pass);
+    Blynk.run();
         // Accensione LED su Blynk
     led_alarm_blynk.on();
     led_pir_blynk.on();
@@ -604,7 +623,7 @@ void setup()
     xTaskCreatePinnedToCore(
         taskBlynk,
         "task-blynk",
-        20000,
+        30000,
         NULL,
         1, // messa con priorità maggiore perchè altrimenti dava problemi con primitiva pbuf_free() e abortiva tutto
         &Handle_TaskBlynk,
@@ -614,8 +633,6 @@ void setup()
     // Prima accensione del LED
     xSemaphoreGive(s_LED);
     Serial.println("Fine setup.");
-    
-
 
     // Delete "setup and loop" task
     vTaskDelete(NULL);
@@ -751,7 +768,7 @@ void taskBlynk(void *pvParameters)
         Blynk.run();
         //xSemaphoreGive(mutex);
         //taskYIELD();
-        vTaskDelay(50 / portTICK_PERIOD_MS); // wait for one second
+        vTaskDelay(20 / portTICK_PERIOD_MS); // wait for one second
     }
 }
 
