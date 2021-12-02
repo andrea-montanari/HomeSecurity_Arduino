@@ -80,24 +80,12 @@ WidgetLCD lcd(V5);
 // Struttura dati con all'interno gli stati e i bloccati
 struct gestore
 {
-    int stato;
-    //   bool alarm;          // mode: DISABLED/ENABLED
-    //   bool siren;         // ON/OFF per far suonare l'allarme
-    //   bool alarm_triggered;
+    int stato; // stato dell'allarme = {'OFF','ON','TRIGGERED'}
     int b_motion_sensor;
-    //   int b_siren;
-    //   int b_stamp;
     int position;
 } g;
 
-int movement_sensor_value; // Place to store read PIR Value
-int window_sensor_value;   // store del valore del bottone (che simula una finestra) (qui quando è = 0 è stato triggerato)
 
-
-
-
-
-TaskHandle_t Handle_TaskBlynk;
 // Semafori privati e mutex
 SemaphoreHandle_t mutex = NULL;
 SemaphoreHandle_t s_pin = NULL;
@@ -117,11 +105,14 @@ void taskServo(void *pvParameters);
 void taskBlynk(void *pvParameters);
 
 
-
+/**
+ * Serve per prendere l'input dall'applicazione Blynk per la rotazione del servo (videocamera). Verrà aggiornata la posizione e
+ * verrà applicata la rotazione svegliando il semaforo privato del servo.
+ * 
+ **/
 BLYNK_WRITE (V4)
 {
   int position = param.asInt();
-  //xSemaphoreTake(mutex, (TickType_t)100);
   xSemaphoreTake(mutex, portMAX_DELAY);
 
   Serial.print("La pozione è: ");
@@ -131,7 +122,6 @@ BLYNK_WRITE (V4)
   
   xSemaphoreGive(mutex);
 }
-
 
 
 
@@ -147,16 +137,6 @@ bool is_pin_valid(char *user_pin, char *true_system_pin)
     }
     return true;
 }
-// non usata ancora (ho avuto problemi)
-void init_pin(int *index_pin, int *user_pin)
-{
-    *index_pin = 0;
-    for (int k = 0; k < LENGTH_PIN; k++)
-    {
-        user_pin[k] = -1;
-    }
-    //Serial.println(index_pin);
-}
 
 // usata per printare solamente fino all'indice a cui siamo arrivati
 void print_user_pin()
@@ -170,6 +150,7 @@ void print_user_pin()
     for (int k = 0; k < index_pin; k++)
     {
         //Serial.print("User pin: "); Serial.println(user_pin[k]);
+        Serial.print(user_pin[k]);
         lcd_string += user_pin[k];
         //Serial.print("Stringa: "); Serial.println(lcd_string);
     }
@@ -180,47 +161,28 @@ void print_user_pin()
 
 void get_pin()
 {
-    //Serial.println("Sono la get_pin - stato: "+String(g.stato));
-    char customKey = customKeypad.getKey();
-    xSemaphoreTake(mutex, portMAX_DELAY);
-
-    xSemaphoreGive(mutex);
-
+    char customKey = customKeypad.getKey(); // non posso fare il controllo direttamente altrimenti perderei il valore se non lo salvo prima
     if (customKey)
     {
-        //Serial.println("Entro nell'if.");
         xSemaphoreTake(mutex, portMAX_DELAY);
         user_pin[index_pin] = customKey; // possibile race conditions su shared variable (per questo usato mutex)
         index_pin++;                     //aggiorno index_pin
-        //print_user_pin();
         xSemaphoreGive(mutex);
-        //Serial.print("Valore semaforo stamp prima della give: "); Serial.println(uxSemaphoreGetCount(s_stamp));
         xSemaphoreGive(s_stamp);
-        //Serial.print("Valore semaforo stamp dopo la give: "); Serial.println(uxSemaphoreGetCount(s_stamp));
     }
 }
 
-void end_pin(void *pvParameters)
-{
-    //xSemaphoreGive(s_stamp);
-}
 
 // Qui la stampa è fatta su seriale (potremmo mantenerlo come un task a parte(?))
 // Importante perchè qui si modificano i vari stati dell'allarme, e si svegliano anche dei task (sirena)
 void stamp()
 {
-    // print_user_pin();
-    //print_alarm_state();
-    //Serial.print("Valore semaforo stamp prima della take: "); Serial.println(uxSemaphoreGetCount(s_stamp));
     xSemaphoreTake(s_stamp, portMAX_DELAY);
-    //Serial.print("Valore semaforo stamp dopo la take: "); Serial.println(uxSemaphoreGetCount(s_stamp));
-    //Serial.println("-- Eseguo la stampa --");
     xSemaphoreTake(mutex, portMAX_DELAY);
     print_user_pin();
     if (index_pin == 4)
     {
         bool valid_pin = is_pin_valid(user_pin, true_system_pin); // check del pin con "0000"
-
         // Switch case per essere più efficienti??
         if (valid_pin)
         {
@@ -228,18 +190,11 @@ void stamp()
             Serial.println(user_pin);
             lcd.clear();
             lcd.print(X_start, Y_first_raw, "PIN corretto");
-            // il pin è giusto, quindi bisogna cambiare lo stato dell'allarme: nel caso in cui sia off->on nel caso sia on->off
-            // BISOGNERA' FARE REFACTORING, siccome non è ottimale
             if (g.stato == ALARM_ON)
             {
                 g.stato = ALARM_OFF; //anche qui g.alarm è una var condivisa, quindi possibili race condition
                 Serial.println("Allarme spento.");
                 xSemaphoreGive(s_LED);
-
-                // if (g.b_siren && g.alarm_triggered){
-                //g.b_siren--;
-                //xSemaphoreGive(s_siren); // sveglio la sirena per dirgli di spegnere il suono
-                //}
             }
             else if (g.stato == ALARM_TRIGGERED)
             {
@@ -251,13 +206,11 @@ void stamp()
             }
             else
             {
-                // g.alarm = true;
                 g.stato = ALARM_ON;
                 while (g.b_motion_sensor)
                 {                                                            // siccome ci sono 2 sensori devo svegliarli entrambi
-                    //Serial.println("END_STAMP: Sveglio sensore movimento."); // potrebbe essere per questo
                     g.b_motion_sensor--;
-                    xSemaphoreGive(s_motion_sensor);
+                    xSemaphoreGive(s_motion_sensor); //semaforo n-ario
                 }
                 xSemaphoreGive(s_LED);
             }
@@ -267,57 +220,42 @@ void stamp()
             Serial.print("Il pin inserito è SBAGLIATO ");
             Serial.println(user_pin);
         }
-        //init_pin(&index_pin); // rinizializzo il pin
-
+        // rinizializzazione del pin
         for (int k = 0; k > LENGTH_PIN; k++)
         {
             user_pin[k] = -1;
         }
         index_pin = 0;
     }
-    //g.stato = 10;
     xSemaphoreGive(mutex);
 }
 
 void start_motion_sensor(void *pvParameters)
 {
     xSemaphoreTake(mutex, portMAX_DELAY);
-    //Serial.println("Sono lo start_motion_sensor");
-    if (g.stato == ALARM_ON || g.stato == ALARM_TRIGGERED) //deve essere nello stato corretto
+    if (g.stato == ALARM_ON || g.stato == ALARM_TRIGGERED) // se allarme è off mi blocco
     {
         xSemaphoreGive(s_motion_sensor);
-        //Serial.println("Sensore di movimento parte.");
     }
     else
     {
-        Serial.print("Stato allarme: ");
-        Serial.println(g.stato);
-        //Serial.println("START_MOTION_SENSOR: Sensore di movimento si BLOCCA.");
         g.b_motion_sensor++;
     }
     xSemaphoreGive(mutex);
     xSemaphoreTake(s_motion_sensor, portMAX_DELAY); // mi blocco qui nel caso
 }
 
-void motion_sensor()
-{ //Serial.println("sono lo motion_sensor");
-    xSemaphoreTake(mutex, portMAX_DELAY);
-    movement_sensor_value = digitalRead(MOTION_SENSOR_PIN); // shared variable, uso mutex
-    //Serial.print("-- Valore sensore di movimento: "); Serial.println(movement_sensor_value);
-    xSemaphoreGive(mutex);
-}
 
-void end_motion_sensor(void *pvParameters)
+void motion_sensor(void *pvParameters)
 {
-    //Serial.println("END_MOTION_SENSOR: Nessun movimento");
-    xSemaphoreTake(mutex, portMAX_DELAY);
-    if (movement_sensor_value)
+    if(digitalRead(MOTION_SENSOR_PIN))
     {
-        //Serial.println("-------- MOVIMENTO RILEVATO da PIR!!! -----------");
-        // invio segno che è stato triggerato anche sull'app (inviando anche notifica)
+        xSemaphoreTake(mutex, portMAX_DELAY);
+        Serial.println("-------- MOVIMENTO RILEVATO da PIR!!! -----------");
         if (g.stato == ALARM_ON)
         { // se c'è movimento e l'allarme è ON (e non triggered quindi)
             g.stato = ALARM_TRIGGERED;
+            // per invio informazioni e notifiche ad app blynk
             Blynk.setProperty(V1, "color", "#ff0000");
             Blynk.setProperty(V1, "label", "PIR TRIGGERED");
             Blynk.logEvent("pir_triggered");
@@ -337,49 +275,35 @@ void end_motion_sensor(void *pvParameters)
             Blynk.setProperty(V1, "label", "PIR TRIGGERED");
             Blynk.logEvent("pir_triggered");
         }
+        xSemaphoreGive(mutex);
     }
-    xSemaphoreGive(mutex);
 }
 
 void start_window_sensor(void *pvParameters)
 {
     xSemaphoreTake(mutex, portMAX_DELAY);
-    //Serial.println("Sono lo start_motion_sensor");
-    if (g.stato == ALARM_ON || g.stato == ALARM_TRIGGERED) //deve essere nello stato corretto
+    if (g.stato == ALARM_ON || g.stato == ALARM_TRIGGERED) // se allarme è off mi blocco
     {
         xSemaphoreGive(s_motion_sensor);
-        //Serial.println("Sensore di movimento parte.");
     }
     else
     {
-        Serial.print("Stato allarme: ");
-        Serial.println(g.stato);
-        //Serial.println("START_MOTION_SENSOR: Sensore di movimento si BLOCCA.");
         g.b_motion_sensor++;
     }
     xSemaphoreGive(mutex);
     xSemaphoreTake(s_motion_sensor, portMAX_DELAY); // mi blocco qui nel caso
 }
 
-void window_sensor()
-{       
-    xSemaphoreTake(mutex, portMAX_DELAY);
-    //Serial.println("Sono il window sensor e mi sono sbloccato");
-	window_sensor_value = digitalRead(WINDOW_PIN); // shared variable, uso mutex
-    xSemaphoreGive(mutex);
-}
 
-
-void end_window_sensor(void* pvParameters)
+void window_sensor(void* pvParameters)
 {
-    //vTaskDelay(50 / portTICK_PERIOD_MS); 
-    xSemaphoreTake(mutex, portMAX_DELAY);
-    if(!window_sensor_value){
+    if(!digitalRead(WINDOW_PIN))
+    {
+        xSemaphoreTake(mutex, portMAX_DELAY);
         Serial.println("-------- MOVIMENTO RILEVATO da finestra!!! -----------");
-        // invio segno che è stato triggerato anche sull'app (inviando anche notifica)
-
         if (g.stato==ALARM_ON){ // se c'è movimento e l'allarme è ON (e non triggered quindi)
             g.stato = ALARM_TRIGGERED;
+            // per invio informazioni e notifiche ad app blynk
             Blynk.setProperty(V2, "color", "#ff0000");
             Blynk.setProperty(V2, "label", "Window OPENED");
             Blynk.logEvent("window_opened");
@@ -397,8 +321,8 @@ void end_window_sensor(void* pvParameters)
             Blynk.setProperty(V2, "label", "Window OPENED");
             Blynk.logEvent("window_opened");
         }
+	    xSemaphoreGive(mutex);
     }
-	xSemaphoreGive(mutex);
 }
 
 
@@ -416,16 +340,15 @@ void servo(){
 }
 
 
-void start_siren(void *pvParameters)
+void siren(void *pvParameters)
 {
     xSemaphoreTake(s_siren, portMAX_DELAY);
     xSemaphoreTake(mutex, portMAX_DELAY);
-    //Serial.println("Sono lo start_motion_sensor");
     if (g.stato == ALARM_TRIGGERED) //deve essere nello stato corretto
     {
         Serial.println("---------------------------- SIRENA ACCESA ----------------------------!!!");
         //tone(BUZZER_PIN, 1000); // Volendo si può usare la PWM per modificare il tono.
-        digitalWrite(BUZZER_PIN, HIGH);
+        //digitalWrite(BUZZER_PIN, HIGH);
     }
     else
     {
@@ -626,7 +549,7 @@ void setup()
         30000,
         NULL,
         1, // messa con priorità maggiore perchè altrimenti dava problemi con primitiva pbuf_free() e abortiva tutto
-        &Handle_TaskBlynk,
+        NULL,
         0);
        
     
@@ -645,18 +568,7 @@ void taskStamp(void *pvParameters) // This is a task.
 
     for (;;)
     {
-        //start_stamp(pvParameters);
-        //vTaskDelay(20 / portTICK_PERIOD_MS); // wait for one second
         stamp();
-        /*
-        xSemaphoreTake(mutex, portMAX_DELAY);
-        Serial.print("Stack della stampa: ");
-        Serial.println(uxTaskGetStackHighWaterMark(NULL));
-        xSemaphoreGive(mutex);
-        */
-        //taskYIELD();
-        //vTaskDelay(20 / portTICK_PERIOD_MS);
-        //end_stamp(pvParameters);
     }
     
 }
@@ -667,14 +579,6 @@ void taskPin(void *pvParameters)
     for (;;)
     {
         get_pin();
-        //vTaskDelay(20 / portTICK_PERIOD_MS); // wait for one second
-        end_pin(pvParameters);
-        /*
-        xSemaphoreTake(mutex, portMAX_DELAY);
-        Serial.print("Stack del PIN: ");
-        Serial.println(uxTaskGetStackHighWaterMark(NULL));
-        xSemaphoreGive(mutex);
-        */
         taskYIELD();
     }
 }
@@ -686,15 +590,7 @@ void taskMotionSensor(void *pvParameters)
     for (;;)
     {
         start_motion_sensor(pvParameters);
-        //vTaskDelay(30 / portTICK_PERIOD_MS);
-        //vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
-        motion_sensor();
-        //vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
-        end_motion_sensor(pvParameters);
-        /*
-        Serial.print("Stack del motion sensor: ");
-        Serial.println(uxTaskGetStackHighWaterMark(NULL));
-        */
+        motion_sensor(pvParameters);
         taskYIELD();
     }
 }
@@ -706,10 +602,7 @@ void taskWindowSensor(void *pvParameters) // This is a task.
     for (;;)
     {
         start_window_sensor(pvParameters);
-        //vTaskDelay(30 / portTICK_PERIOD_MS);
-        //taskYIELD();
-        window_sensor();
-        end_window_sensor(pvParameters);
+        window_sensor(pvParameters);
         taskYIELD();
     }
 }
@@ -730,17 +623,9 @@ void taskServo(void *pvParameters) // This is a task.
 void taskSiren(void *pvParameters)
 {
     (void)pvParameters;
-    //Serial.begin(4800);
     for (;;)
     {
-        start_siren(pvParameters);
-        /*
-        Serial.print("Stack della sirena: ");
-        Serial.println(uxTaskGetStackHighWaterMark(NULL));
-        */
-        //vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
-        //siren();
-        //vTaskDelay(100 / portTICK_PERIOD_MS); // wait for one second
+        siren(pvParameters);
     }
 }
 
@@ -749,12 +634,7 @@ void taskLED(void *pvParameters)
     (void)pvParameters;
     for (;;)
     {
-        //vTaskDelay(10 / portTICK_PERIOD_MS);
         statusLED(pvParameters);
-        /*
-        Serial.print("Stack del LED: ");
-        Serial.println(uxTaskGetStackHighWaterMark(NULL));
-        */
     }
 }
 
@@ -764,10 +644,7 @@ void taskBlynk(void *pvParameters)
     (void)pvParameters;
     for (;;)
     {
-        //xSemaphoreTake(mutex, portMAX_DELAY);
         Blynk.run();
-        //xSemaphoreGive(mutex);
-        //taskYIELD();
         vTaskDelay(20 / portTICK_PERIOD_MS); // wait for one second
     }
 }
