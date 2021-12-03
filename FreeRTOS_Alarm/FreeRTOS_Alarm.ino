@@ -276,6 +276,8 @@ void motion_sensor(void *pvParameters)
             Blynk.logEvent("pir_triggered");
         }
         xSemaphoreGive(mutex);
+        // Aggiunto delay
+        vTaskDelay( 2500 / portTICK_PERIOD_MS);
     }
 }
 
