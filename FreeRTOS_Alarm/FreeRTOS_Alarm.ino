@@ -245,11 +245,13 @@ void start_motion_sensor(void *pvParameters)
     xSemaphoreTake(s_motion_sensor, portMAX_DELAY); // mi blocco qui nel caso
 }
 
+unsigned long myTime;
+
 
 void motion_sensor(void *pvParameters)
 {
     if(digitalRead(MOTION_SENSOR_PIN))
-    {
+    {   
         xSemaphoreTake(mutex, portMAX_DELAY);
         Serial.println("-------- MOVIMENTO RILEVATO da PIR!!! -----------");
         if (g.stato == ALARM_ON)
@@ -277,7 +279,10 @@ void motion_sensor(void *pvParameters)
         }
         xSemaphoreGive(mutex);
         // Aggiunto delay
-        vTaskDelay( 2500 / portTICK_PERIOD_MS);
+        Serial.println("Inizio delay PIR");
+        vTaskDelay( 5200 / portTICK_PERIOD_MS); // il delay ha due funzioni: per risolvere il problema del periodo HIGH (vedi video) e per risparmiare cpu durante il periodo low (in cui so per certo che non diventerà HIGH) per limiti fisici PIR
+        Serial.println("Fine delay PIR");
+        
     }
 }
 
