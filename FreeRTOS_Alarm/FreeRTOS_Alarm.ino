@@ -416,12 +416,8 @@ void statusLED(void *pvParameters)
 
 void setup()
 {
-    // Setting idle watchdog to 30s and disabling the controller reset if triggered
-    // esp_task_wdt_init(999999999, false);
-
     // Unsubscribe idle task from the Task Watchdog Timer
-    // TaskHandle_t idleTaskHandle = xTaskGetCurrentTaskHandle();
-    esp_task_wdt_delete(xTaskGetCurrentTaskHandle());
+    esp_task_wdt_delete(xTaskGetIdleTaskHandle());
     
     
         // Begin WiFi and Blynk connection
