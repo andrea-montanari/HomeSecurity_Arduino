@@ -382,20 +382,17 @@ void statusLED(void *pvParameters)
     // I collegamenti sono fatti in modo da avere:
     // - lo stato ALARM_OFF che accende la luce blu;
     // - lo stato ALARM_ON che accende la luce verde;
-    // - lo stato ALARM_TRIGGERED che accende la luce rossa;
-
-    // Mantenere la critical section per tutta la funzione per evitare di considerare stati vecchi?
-    xSemaphoreTake(mutex, portMAX_DELAY);
-    int stato = g.stato;
-    xSemaphoreGive(mutex);
+    // - lo stato ALARM_TRIGGERED che accende la luce rossa;    
 
     digitalWrite(RED_LED, LOW);
     digitalWrite(BLUE_LED, LOW);
     digitalWrite(GREEN_LED, LOW);
-    digitalWrite(stato, HIGH);
+
+    xSemaphoreTake(mutex, portMAX_DELAY);
+    digitalWrite(g.stato, HIGH);
     
     // Fare task diviso?
-    switch (stato)
+    switch (g.stato)
     {
     case ALARM_OFF:
         Blynk.setProperty(V0, "color", "#0000ff");
@@ -417,6 +414,7 @@ void statusLED(void *pvParameters)
         Blynk.logEvent("ALARM_TRIGGERED");
         break;
     }
+    xSemaphoreGive(mutex);
     
     
 }
