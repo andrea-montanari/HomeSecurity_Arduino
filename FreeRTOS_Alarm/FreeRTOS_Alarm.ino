@@ -233,16 +233,20 @@ void stamp()
 void start_motion_sensor(void *pvParameters)
 {
     xSemaphoreTake(mutex, portMAX_DELAY);
+    Serial.print("semaforo nel motion sensor: "); Serial.println(uxSemaphoreGetCount(s_motion_sensor));
     if (g.stato == ALARM_ON || g.stato == ALARM_TRIGGERED) // se allarme è off mi blocco
     {
         xSemaphoreGive(s_motion_sensor);
     }
     else
     {
+        Serial.println("Blocco motion sensor");
         g.b_motion_sensor++;
     }
     xSemaphoreGive(mutex);
+    vTaskDelay(500 / portTICK_PERIOD_MS);
     xSemaphoreTake(s_motion_sensor, portMAX_DELAY); // mi blocco qui nel caso
+    Serial.println("Motion sensor non bloccato");
 }
 
 unsigned long myTime;
@@ -280,7 +284,7 @@ void motion_sensor(void *pvParameters)
         xSemaphoreGive(mutex);
         // Aggiunto delay
         Serial.println("Inizio delay PIR");
-        vTaskDelay( 5200 / portTICK_PERIOD_MS); // il delay ha due funzioni: per risolvere il problema del periodo HIGH (vedi video) e per risparmiare cpu durante il periodo low (in cui so per certo che non diventerà HIGH) per limiti fisici PIR
+        //vTaskDelay( 5200 / portTICK_PERIOD_MS); // il delay ha due funzioni: per risolvere il problema del periodo HIGH (vedi video) e per risparmiare cpu durante il periodo low (in cui so per certo che non diventerà HIGH) per limiti fisici PIR
         Serial.println("Fine delay PIR");
         
     }
@@ -289,16 +293,20 @@ void motion_sensor(void *pvParameters)
 void start_window_sensor(void *pvParameters)
 {
     xSemaphoreTake(mutex, portMAX_DELAY);
+    Serial.print("semaforo nel window: "); Serial.println(uxSemaphoreGetCount(s_motion_sensor));
     if (g.stato == ALARM_ON || g.stato == ALARM_TRIGGERED) // se allarme è off mi blocco
     {
         xSemaphoreGive(s_motion_sensor);
     }
     else
     {
+        Serial.println("Blocco window");
         g.b_motion_sensor++;
     }
     xSemaphoreGive(mutex);
+    vTaskDelay(500 / portTICK_PERIOD_MS);
     xSemaphoreTake(s_motion_sensor, portMAX_DELAY); // mi blocco qui nel caso
+    Serial.println("Window non bloccata");
 }
 
 
@@ -377,6 +385,7 @@ void statusLED(void *pvParameters)
     // - lo stato ALARM_ON che accende la luce verde;
     // - lo stato ALARM_TRIGGERED che accende la luce rossa;
 
+    // Mantenere la critical section per tutta la funzione per evitare di considerare stati vecchi?
     xSemaphoreTake(mutex, portMAX_DELAY);
     int stato = g.stato;
     xSemaphoreGive(mutex);
@@ -386,7 +395,7 @@ void statusLED(void *pvParameters)
     digitalWrite(GREEN_LED, LOW);
     digitalWrite(stato, HIGH);
     
-    
+    // Fare task diviso?
     switch (stato)
     {
     case ALARM_OFF:
