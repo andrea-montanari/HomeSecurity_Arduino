@@ -1,3 +1,5 @@
+#include <dummy.h>
+
 #include "Secrets.h"
 #define BLYNK_TEMPLATE_ID SECRET_BLYNK_TEMPLATE_ID
 #define BLYNK_DEVICE_NAME SECRET_BLYNK_DEVICE_NAME
@@ -12,6 +14,26 @@
 #include <ESP32Servo.h>
 #include <Keypad.h>
 #include "freertos/task.h"
+
+// Risorse per la stampa degli high water mark
+#include <stdio.h>
+#include <stdlib.h>
+
+FILE *fptr;
+UBaseType_t stackStamp = 0;
+UBaseType_t stackPIN = 0;
+UBaseType_t stackMotion = 0;
+UBaseType_t stackWindow = 0;
+UBaseType_t stackSiren = 0;
+UBaseType_t stackServo = 0;
+UBaseType_t stackLED = 0;
+UBaseType_t stackBlynk = 0;
+
+// SemaphoreHandle_t stack_mutex = NULL;
+
+#define PRINT_STACK_HWM
+
+
 
 char auth[] = BLYNK_AUTH_TOKEN;
 
@@ -398,20 +420,17 @@ void statusLED(void *pvParameters)
     // I collegamenti sono fatti in modo da avere:
     // - lo stato ALARM_OFF che accende la luce blu;
     // - lo stato ALARM_ON che accende la luce verde;
-    // - lo stato ALARM_TRIGGERED che accende la luce rossa;
-
-    // Mantenere la critical section per tutta la funzione per evitare di considerare stati vecchi?
-    xSemaphoreTake(mutex, portMAX_DELAY);
-    int stato = g.stato;
-    xSemaphoreGive(mutex);
+    // - lo stato ALARM_TRIGGERED che accende la luce rossa;    
 
     digitalWrite(RED_LED, LOW);
     digitalWrite(BLUE_LED, LOW);
     digitalWrite(GREEN_LED, LOW);
-    digitalWrite(stato, HIGH);
+
+    xSemaphoreTake(mutex, portMAX_DELAY);
+    digitalWrite(g.stato, HIGH);
     
     // Fare task diviso?
-    switch (stato)
+    switch (g.stato)
     {
     case ALARM_OFF:
         Blynk.setProperty(V0, "color", "#0000ff");
@@ -432,6 +451,7 @@ void statusLED(void *pvParameters)
         Blynk.logEvent("ALARM_TRIGGERED");
         break;
     }
+    xSemaphoreGive(mutex);
     
     
 }
@@ -510,6 +530,12 @@ void setup()
     {
         s_LED = xSemaphoreCreateBinary();
     }
+    // #ifdef PRINT_STACK_HWM
+    // if (stack_mutex == NULL)
+    // {
+    //     stack_mutex = xSemaphoreCreateMutex();
+    // }
+    // #endif
 
     // Controlla se funziona anche dandogli meno stack-size (es.128)
     
@@ -574,7 +600,7 @@ void setup()
     xTaskCreatePinnedToCore(
         taskLED,
         "task-LED",
-        10000,
+        3000,
         NULL,
         0, // priority
         NULL,
@@ -583,7 +609,7 @@ void setup()
     xTaskCreatePinnedToCore(
         taskBlynk,
         "task-blynk",
-        30000,
+        1500,
         NULL,
         1, // messa con priorità maggiore perchè altrimenti dava problemi con primitiva pbuf_free() e abortiva tutto
         NULL,
@@ -595,9 +621,17 @@ void setup()
     Serial.println("Fine setup.");
 
     // Delete "setup and loop" task
+    #ifndef PRINT_STACK_HWM
     vTaskDelete(NULL);
+    #endif
 }
 
+
+// UBaseType_t getMax (UBaseType_t old, UBaseType_t new_) {
+//     if (old > new_)
+//         return old;
+//     return new_;
+// }
 
 void taskStamp(void *pvParameters) // This is a task.
 {
@@ -606,6 +640,14 @@ void taskStamp(void *pvParameters) // This is a task.
     for (;;)
     {
         stamp();
+
+        #ifdef PRINT_STACK_HWM
+        // xSemaphoreTake(mutex, portMAX_DELAY);
+        // Serial.print("Stack high water mark STAMP: ");
+        stackStamp = uxTaskGetStackHighWaterMark(NULL);
+        // Serial.println(stackStamp);
+        // xSemaphoreGive(mutex);
+        #endif
     }
     
 }
@@ -616,7 +658,15 @@ void taskPin(void *pvParameters)
     for (;;)
     {
         get_pin();
+
+        #ifdef PRINT_STACK_HWM
+        // xSemaphoreTake(mutex, portMAX_DELAY);
+        // Serial.print("Stack high water mark PIN: ");
+        stackPIN = uxTaskGetStackHighWaterMark(NULL);
+        // Serial.println(stackPIN);
+        // xSemaphoreGive(mutex);
         taskYIELD();
+        #endif
     }
 }
 
@@ -631,7 +681,15 @@ void taskMotionSensor(void *pvParameters)
     {
         start_motion_sensor(pvParameters);
         motion_sensor((void *)id_pir);
+
+        #ifdef PRINT_STACK_HWM
+        // xSemaphoreTake(mutex, portMAX_DELAY);
+        // Serial.print("Stack high water mark MOTION: ");
+        stackMotion = uxTaskGetStackHighWaterMark(NULL);
+        // Serial.println(stackMotion);
+        // xSemaphoreGive(mutex);
         taskYIELD();
+        #endif
     }
 }
 
@@ -643,7 +701,15 @@ void taskWindowSensor(void *pvParameters) // This is a task.
     {
         start_window_sensor(pvParameters);
         window_sensor(pvParameters);
+
+        #ifdef PRINT_STACK_HWM
+        // xSemaphoreTake(mutex, portMAX_DELAY);
+        // Serial.print("Stack high water mark WINDOW: ");
+        stackWindow = uxTaskGetStackHighWaterMark(NULL);
+        // Serial.println(stackWindow);
+        // xSemaphoreGive(mutex);
         taskYIELD();
+        #endif
     }
 }
 
@@ -657,6 +723,14 @@ void taskServo(void *pvParameters) // This is a task.
     {
         start_servo(pvParameters);
         servo();
+
+        #ifdef PRINT_STACK_HWM
+        // xSemaphoreTake(mutex, portMAX_DELAY);
+        // Serial.print("Stack high water mark SERVO: ");
+        stackServo = uxTaskGetStackHighWaterMark(NULL);
+        // Serial.println(stackServo);
+        // xSemaphoreGive(mutex);
+        #endif
     }
 }
 
@@ -666,6 +740,14 @@ void taskSiren(void *pvParameters)
     for (;;)
     {
         siren(pvParameters);
+
+        #ifdef PRINT_STACK_HWM
+        // xSemaphoreTake(mutex, portMAX_DELAY);
+        // Serial.print("Stack high water mark SIREN: ");
+        stackSiren = uxTaskGetStackHighWaterMark(NULL);
+        // Serial.println(stackSiren);
+        // xSemaphoreGive(mutex);
+        #endif
     }
 }
 
@@ -675,6 +757,14 @@ void taskLED(void *pvParameters)
     for (;;)
     {
         statusLED(pvParameters);
+
+        #ifdef PRINT_STACK_HWM
+        // xSemaphoreTake(mutex, portMAX_DELAY);
+        // Serial.print("Stack high water mark LED: ");
+        stackLED = uxTaskGetStackHighWaterMark(NULL);
+        // Serial.println(stackLED);
+        // xSemaphoreGive(mutex);
+        #endif
     }
 }
 
@@ -686,11 +776,45 @@ void taskBlynk(void *pvParameters)
     {
         Blynk.run();
         vTaskDelay(100 / portTICK_PERIOD_MS); // wait for 100 ms 
+
+        #ifdef PRINT_STACK_HWM
+        // xSemaphoreTake(mutex, portMAX_DELAY);
+        // Serial.print("Stack high water mark BLYNK: ");
+        stackBlynk = uxTaskGetStackHighWaterMark(NULL);
+        // Serial.println(stackBlynk);
+        // xSemaphoreGive(mutex);
+        vTaskDelay(20 / portTICK_PERIOD_MS); // wait for one second
+        #endif
+
+    //     TaskStatus_t *pxTaskStatusArray;
+    //     volatile UBaseType_t uxArraySize;
+    //     uint32_t ulTotalRunTime, ulStatsAsPercentage;
+    //  uxArraySize = uxTaskGetNumberOfTasks();
+
+    //      uxArraySize = uxTaskGetSystemState( pxTaskStatusArray, uxArraySize, &ulTotalRunTime );
+    //      Serial.print("------- SYSTEM STATE: \n\n");
+    //      Serial.print(uxArraySize);
+    //      Serial.print("---------\n\n");
+
     }
 }
 
-
 void loop()
 {
-
+    
+    #ifdef PRINT_STACK_HWM 
+    xSemaphoreTake(mutex, portMAX_DELAY);
+    Serial.print ("Free Heap: ");      Serial.println(xPortGetFreeHeapSize());
+    // Serial.print ("Heap info: ");      Serial.println(heap_caps_get_info());
+    Serial.print("stackStamp:\t");     Serial.println(stackStamp);
+    Serial.print("stackPIN:\t");       Serial.println(stackPIN);
+    Serial.print("stackMotion:\t");    Serial.println(stackMotion);
+    Serial.print("stackWindow:\t");    Serial.println(stackWindow);
+    Serial.print("stackServo:\t");     Serial.println(stackServo);
+    Serial.print("stackSiren:\t");     Serial.println(stackSiren);
+    Serial.print("stackLED:\t");       Serial.println(stackLED);
+    Serial.print("stackBlynk:\t");     Serial.println(stackBlynk);
+    xSemaphoreGive(mutex);
+    vTaskDelay(2000 / portTICK_PERIOD_MS);   
+    #endif
 }
