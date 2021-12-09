@@ -11,7 +11,7 @@
 #include <BlynkSimpleEsp32.h>
 #include <ESP32Servo.h>
 #include <Keypad.h>
-
+#include "freertos/task.h"
 
 char auth[] = BLYNK_AUTH_TOKEN;
 
@@ -33,7 +33,8 @@ char pass[] = SECRET_PSW;
 
 // lunghezza PIN
 #define LENGTH_PIN 4
-#define MOTION_SENSOR_PIN 25
+#define PIR1_PIN 25
+#define PIR2_PIN 32
 #define BUZZER_PIN 33
 #define SERVO_PIN 14
 #define WINDOW_PIN 12
@@ -73,7 +74,8 @@ int index_pin;                                  // indice per gestire user_pin
 // Blynk setup
 BlynkTimer timer;
 WidgetLED led_alarm_blynk(V0);
-WidgetLED led_pir_blynk(V1);
+WidgetLED led_pir1_blynk(V1);
+WidgetLED led_pir2_blynk(V6);
 WidgetLED led_window_blynk(V2);
 WidgetLCD lcd(V5);
 
@@ -251,7 +253,25 @@ unsigned long myTime;
 
 void motion_sensor(void *pvParameters)
 {
-    if(digitalRead(MOTION_SENSOR_PIN))
+    uint32_t id_pir = (uint32_t)pvParameters;
+    uint32_t pin_pir;
+    uint32_t virtual_pin;
+    String str_code_blynk;
+    uint32_t position_pir;
+    //uint32_t pin_pir = (id_pir==1) ? PIR1_PIN : PIR2_PIN; // per fare un if con assegnamento piu efficiente
+    if (id_pir==1){
+        pin_pir=PIR1_PIN;
+        virtual_pin=V1;
+        str_code_blynk="pir1_triggered";
+        position_pir=180;
+    }
+    else{
+        pin_pir=PIR2_PIN;
+        virtual_pin=V6;
+        str_code_blynk="pir2_triggered";
+        position_pir=0;
+    }
+    if(digitalRead(pin_pir))
     {   
         xSemaphoreTake(mutex, portMAX_DELAY);
         if (g.stato==ALARM_OFF){ // caso particolare in cui, mentre il sensore ha fatto post-previa e ha passato il semaforo, viene modificato lo stato dell'allarme (si esce e si blocca il giro seguente)
@@ -262,24 +282,22 @@ void motion_sensor(void *pvParameters)
         { // se c'è movimento e l'allarme è ON (e non triggered quindi)
             g.stato = ALARM_TRIGGERED;
             // per invio informazioni e notifiche ad app blynk
-            Blynk.setProperty(V1, "color", "#ff0000");
-            Blynk.setProperty(V1, "label", "PIR TRIGGERED");
-            Blynk.logEvent("pir_triggered");
+            Blynk.setProperty(virtual_pin, "color", "#ff0000");
+            Blynk.logEvent(str_code_blynk);
             xSemaphoreGive(s_siren);
             xSemaphoreGive(s_LED);
-            if (g.position != 180)
+            if (g.position != position_pir)
             {                     // se è gia in posizione 180 sta gia filmando quindi non serve svegliare videocamera
-                g.position = 180; // modifica la posizione
+                g.position = position_pir; // modifica la posizione
                 xSemaphoreGive(s_servo);
             }
         }
-        else if (g.stato == ALARM_TRIGGERED && g.position != 180)
+        else if (g.stato == ALARM_TRIGGERED && g.position != position_pir)
         {                     // sveglio il servo per spostare videocamera
-            g.position = 180; // modifica la posizione
+            g.position = position_pir; // modifica la posizione
             xSemaphoreGive(s_servo);
-            Blynk.setProperty(V1, "color", "#ff0000");
-            Blynk.setProperty(V1, "label", "PIR TRIGGERED");
-            Blynk.logEvent("pir_triggered");
+            Blynk.setProperty(virtual_pin, "color", "#ff0000");
+            Blynk.logEvent(str_code_blynk);
         }
         xSemaphoreGive(mutex);
         // Aggiunto delay
@@ -319,20 +337,18 @@ void window_sensor(void* pvParameters)
             g.stato = ALARM_TRIGGERED;
             // per invio informazioni e notifiche ad app blynk
             Blynk.setProperty(V2, "color", "#ff0000");
-            Blynk.setProperty(V2, "label", "Window OPENED");
             Blynk.logEvent("window_opened");
             xSemaphoreGive(s_siren);
             xSemaphoreGive(s_LED);
-            if (g.position!=0) { // se è gia in posizione 180 sta gia filmando quindi non serve svegliare videocamera
-                g.position=0; // modifica la posizione
+            if (g.position!=60) { // se è gia in posizione 180 sta gia filmando quindi non serve svegliare videocamera
+                g.position=60; // modifica la posizione
                 xSemaphoreGive(s_servo);
 	        }
         }
-        else if (g.stato == ALARM_TRIGGERED && g.position!=0){ // sveglio il servo per spostare videocamera
-            g.position=0; // modifica la posizione
+        else if (g.stato == ALARM_TRIGGERED && g.position!=60){ // sveglio il servo per spostare videocamera
+            g.position=60; // modifica la posizione
             xSemaphoreGive(s_servo);
             Blynk.setProperty(V2, "color", "#ff0000");
-            Blynk.setProperty(V2, "label", "Window OPENED");
             Blynk.logEvent("window_opened");
         }
 	    xSemaphoreGive(mutex);
@@ -401,9 +417,8 @@ void statusLED(void *pvParameters)
         Blynk.setProperty(V0, "color", "#0000ff");
         Blynk.setProperty(V0, "label", "ALARM OFF");
         Blynk.setProperty(V1, "color", "#00ff00");
-        //Blynk.setProperty(V1, "label", "PIR never triggered");
         Blynk.setProperty(V2, "color", "#00ff00");
-        //Blynk.setProperty(V2, "label", "Window never opened");
+        Blynk.setProperty(V6, "color", "#00ff00");
         break;
     
     case ALARM_ON:
@@ -433,11 +448,13 @@ void setup()
     Blynk.run();
         // Accensione LED su Blynk
     led_alarm_blynk.on();
-    led_pir_blynk.on();
+    led_pir1_blynk.on();
+    led_pir2_blynk.on();
     led_window_blynk.on();
     timer.run();
 
-    pinMode(MOTION_SENSOR_PIN, INPUT);
+    pinMode(PIR1_PIN, INPUT);
+    pinMode(PIR2_PIN, INPUT);
     pinMode(BUZZER_PIN, OUTPUT);
     pinMode(RED_LED, OUTPUT);
     pinMode(GREEN_LED, OUTPUT);
@@ -479,7 +496,7 @@ void setup()
     }
     if (s_motion_sensor == NULL)
     {
-        s_motion_sensor = xSemaphoreCreateCounting( 2, 0 ); // è un semaforo per 2 sensori
+        s_motion_sensor = xSemaphoreCreateCounting( 3, 0 ); // è un semaforo per 3 sensori
     }
     if (s_servo == NULL)
     {
@@ -516,9 +533,17 @@ void setup()
 
     xTaskCreatePinnedToCore(
         taskMotionSensor,
-        "task-motion-sensor",
+        "task-motion-sensor1",
         20000,
+        (void *)1,
+        0, // priority
         NULL,
+        1);
+    xTaskCreatePinnedToCore(
+        taskMotionSensor,
+        "task-motion-sensor2",
+        20000,
+        (void *)2,
         0, // priority
         NULL,
         1);
@@ -554,6 +579,7 @@ void setup()
         0, // priority
         NULL,
         1);  
+        
     xTaskCreatePinnedToCore(
         taskBlynk,
         "task-blynk",
@@ -597,11 +623,14 @@ void taskPin(void *pvParameters)
 void taskMotionSensor(void *pvParameters)
 {
     (void)pvParameters;
+    uint32_t id_pir = (uint32_t)pvParameters;
+    Serial.print("Il PIN del PIR è: ");
+    Serial.println(id_pir);
     //Serial.begin(4800);
     for (;;)
     {
         start_motion_sensor(pvParameters);
-        motion_sensor(pvParameters);
+        motion_sensor((void *)id_pir);
         taskYIELD();
     }
 }
@@ -656,7 +685,7 @@ void taskBlynk(void *pvParameters)
     for (;;)
     {
         Blynk.run();
-        vTaskDelay(20 / portTICK_PERIOD_MS); // wait for one second
+        vTaskDelay(100 / portTICK_PERIOD_MS); // wait for 100 ms 
     }
 }
 
