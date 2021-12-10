@@ -434,7 +434,6 @@ void statusLED(void *pvParameters)
     xSemaphoreTake(mutex, portMAX_DELAY);
     digitalWrite(g.stato, HIGH);
     
-    // Fare task diviso?
     switch (g.stato)
     {
     case ALARM_OFF:
@@ -458,7 +457,6 @@ void statusLED(void *pvParameters)
     }
     xSemaphoreGive(mutex);
     
-    
 }
 
 
@@ -475,7 +473,6 @@ void setup()
     led_pir1_blynk.on();
     led_pir2_blynk.on();
     led_window_blynk.on();
-    timer.run();
 
     pinMode(PIR1_PIN, INPUT);
     pinMode(PIR2_PIN, INPUT);
@@ -503,9 +500,7 @@ void setup()
         user_pin[k] = -1;
     }
     index_pin = 0;
-    // g.b_stamp = 0;
 
-    // Credo che i controlli si possano togliere (?)
     if (mutex == NULL) // Check to confirm that the Serial Semaphore has not already been created.
     {
         mutex = xSemaphoreCreateMutex();
@@ -534,14 +529,6 @@ void setup()
     {
         s_LED = xSemaphoreCreateBinary();
     }
-    // #ifdef PRINT_STACK_HWM
-    // if (stack_mutex == NULL)
-    // {
-    //     stack_mutex = xSemaphoreCreateMutex();
-    // }
-    // #endif
-
-    // Controlla se funziona anche dandogli meno stack-size (es.128)
     
     xTaskCreatePinnedToCore(
         taskStamp,
@@ -604,7 +591,7 @@ void setup()
     xTaskCreatePinnedToCore(
         taskLED,
         "task-LED",
-        20000,
+        10000,
         NULL,
         0, // priority
         NULL,
@@ -620,7 +607,7 @@ void setup()
         0);
        
     
-    // Prima accensione del LED
+    // First lighting of the LED
     xSemaphoreGive(s_LED);
     Serial.println("Fine setup.");
 
@@ -631,12 +618,6 @@ void setup()
 }
 
 
-// UBaseType_t getMax (UBaseType_t old, UBaseType_t new_) {
-//     if (old > new_)
-//         return old;
-//     return new_;
-// }
-
 void taskStamp(void *pvParameters) // This is a task.
 {
     (void)pvParameters;
@@ -646,11 +627,7 @@ void taskStamp(void *pvParameters) // This is a task.
         stamp();
 
         #ifdef PRINT_STACK_HWM
-        // xSemaphoreTake(mutex, portMAX_DELAY);
-        // Serial.print("Stack high water mark STAMP: ");
         stackStamp = uxTaskGetStackHighWaterMark(NULL);
-        // Serial.println(stackStamp);
-        // xSemaphoreGive(mutex);
         #endif
     }
     
@@ -664,13 +641,10 @@ void taskPin(void *pvParameters)
         get_pin();
 
         #ifdef PRINT_STACK_HWM
-        // xSemaphoreTake(mutex, portMAX_DELAY);
-        // Serial.print("Stack high water mark PIN: ");
         stackPIN = uxTaskGetStackHighWaterMark(NULL);
-        // Serial.println(stackPIN);
-        // xSemaphoreGive(mutex);
-        taskYIELD();
         #endif
+
+        taskYIELD();
     }
 }
 
@@ -687,13 +661,10 @@ void taskMotionSensor(void *pvParameters)
         motion_sensor((void *)id_pir);
 
         #ifdef PRINT_STACK_HWM
-        // xSemaphoreTake(mutex, portMAX_DELAY);
-        // Serial.print("Stack high water mark MOTION: ");
         stackMotion = uxTaskGetStackHighWaterMark(NULL);
-        // Serial.println(stackMotion);
-        // xSemaphoreGive(mutex);
-        taskYIELD();
         #endif
+
+        taskYIELD();
     }
 }
 
@@ -710,10 +681,9 @@ void taskWindowSensor(void *pvParameters) // This is a task.
         // xSemaphoreTake(mutex, portMAX_DELAY);
         // Serial.print("Stack high water mark WINDOW: ");
         stackWindow = uxTaskGetStackHighWaterMark(NULL);
-        // Serial.println(stackWindow);
-        // xSemaphoreGive(mutex);
-        taskYIELD();
         #endif
+
+        taskYIELD();
     }
 }
 
@@ -729,11 +699,7 @@ void taskServo(void *pvParameters) // This is a task.
         servo();
 
         #ifdef PRINT_STACK_HWM
-        // xSemaphoreTake(mutex, portMAX_DELAY);
-        // Serial.print("Stack high water mark SERVO: ");
         stackServo = uxTaskGetStackHighWaterMark(NULL);
-        // Serial.println(stackServo);
-        // xSemaphoreGive(mutex);
         #endif
     }
 }
@@ -746,11 +712,7 @@ void taskSiren(void *pvParameters)
         siren(pvParameters);
 
         #ifdef PRINT_STACK_HWM
-        // xSemaphoreTake(mutex, portMAX_DELAY);
-        // Serial.print("Stack high water mark SIREN: ");
         stackSiren = uxTaskGetStackHighWaterMark(NULL);
-        // Serial.println(stackSiren);
-        // xSemaphoreGive(mutex);
         #endif
     }
 }
@@ -763,11 +725,7 @@ void taskLED(void *pvParameters)
         statusLED(pvParameters);
 
         #ifdef PRINT_STACK_HWM
-        // xSemaphoreTake(mutex, portMAX_DELAY);
-        // Serial.print("Stack high water mark LED: ");
         stackLED = uxTaskGetStackHighWaterMark(NULL);
-        // Serial.println(stackLED);
-        // xSemaphoreGive(mutex);
         #endif
     }
 }
@@ -779,27 +737,12 @@ void taskBlynk(void *pvParameters)
     for (;;)
     {
         Blynk.run();
-        vTaskDelay(100 / portTICK_PERIOD_MS); // wait for 100 ms 
+        vTaskDelay(100 / portTICK_PERIOD_MS);
 
         #ifdef PRINT_STACK_HWM
-        // xSemaphoreTake(mutex, portMAX_DELAY);
-        // Serial.print("Stack high water mark BLYNK: ");
         stackBlynk = uxTaskGetStackHighWaterMark(NULL);
-        // Serial.println(stackBlynk);
-        // xSemaphoreGive(mutex);
-        vTaskDelay(20 / portTICK_PERIOD_MS); // wait for one second
+        vTaskDelay(20 / portTICK_PERIOD_MS);
         #endif
-
-    //     TaskStatus_t *pxTaskStatusArray;
-    //     volatile UBaseType_t uxArraySize;
-    //     uint32_t ulTotalRunTime, ulStatsAsPercentage;
-    //  uxArraySize = uxTaskGetNumberOfTasks();
-
-    //      uxArraySize = uxTaskGetSystemState( pxTaskStatusArray, uxArraySize, &ulTotalRunTime );
-    //      Serial.print("------- SYSTEM STATE: \n\n");
-    //      Serial.print(uxArraySize);
-    //      Serial.print("---------\n\n");
-
     }
 }
 
@@ -808,7 +751,7 @@ void loop()
     
     #ifdef PRINT_STACK_HWM 
     xSemaphoreTake(mutex, portMAX_DELAY);
-    Serial.print ("Free Heap: ");      Serial.println(xPortGetFreeHeapSize());
+    Serial.print ("Free Heap: ");      Serial.println(xPortGetMinimumEverFreeHeapSize());
     // Serial.print ("Heap info: ");      Serial.println(heap_caps_get_info());
     Serial.print("stackStamp:\t");     Serial.println(stackStamp);
     Serial.print("stackPIN:\t");       Serial.println(stackPIN);
