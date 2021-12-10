@@ -66,9 +66,14 @@ char pass[] = SECRET_PSW;
 #define Y_first_raw 0
 #define Y_second_raw 1
 
+// Colors
 #define MAX_COLOR_INTENSITY 255
 #define MIN_COLOR_INTENSITY 0
+
 #define noTone 0
+
+// CPUs
+#define CPU_0 0
 
 // Setup del keypad
 const byte ROWS = 4; //four rows
@@ -460,13 +465,12 @@ void statusLED(void *pvParameters)
 void setup()
 {
     // Unsubscribe idle task from the Task Watchdog Timer
-    esp_task_wdt_delete(xTaskGetIdleTaskHandle());
+    esp_task_wdt_delete(xTaskGetIdleTaskHandleForCPU(CPU_0));
     
-    
-        // Begin WiFi and Blynk connection
+    // Begin WiFi and Blynk connection
     Blynk.begin(auth, ssid, pass);
     Blynk.run();
-        // Accensione LED su Blynk
+    // Accensione LED su Blynk
     led_alarm_blynk.on();
     led_pir1_blynk.on();
     led_pir2_blynk.on();
@@ -600,7 +604,7 @@ void setup()
     xTaskCreatePinnedToCore(
         taskLED,
         "task-LED",
-        3000,
+        20000,
         NULL,
         0, // priority
         NULL,
@@ -609,7 +613,7 @@ void setup()
     xTaskCreatePinnedToCore(
         taskBlynk,
         "task-blynk",
-        1500,
+        30000,
         NULL,
         1, // messa con priorità maggiore perchè altrimenti dava problemi con primitiva pbuf_free() e abortiva tutto
         NULL,
