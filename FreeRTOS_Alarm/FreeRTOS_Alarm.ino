@@ -31,7 +31,7 @@ UBaseType_t stackBlynk = 0;
 
 // SemaphoreHandle_t stack_mutex = NULL;
 
-#define PRINT_STACK_HWM
+//#define PRINT_STACK_HWM
 
 
 
@@ -65,6 +65,12 @@ char pass[] = SECRET_PSW;
 #define X_start 0
 #define Y_first_raw 0
 #define Y_second_raw 1
+
+// Position Camera
+#define POSITION_DEFAULT 90
+#define POSITION_PIR1 180
+#define POSITION_PIR2 0
+#define POSITION_WINDOW 60
 
 // Colors
 #define MAX_COLOR_INTENSITY 255
@@ -228,7 +234,7 @@ void stamp()
             else if (g.stato == ALARM_TRIGGERED)
             {
                 g.stato = ALARM_OFF;
-                g.position = 90; // la videocamera deve riprendere il suo stato iniziale (ovvero 90 gradi: al centro)
+                g.position = POSITION_DEFAULT; // la videocamera deve riprendere il suo stato iniziale (ovvero 90 gradi: al centro)
                 xSemaphoreGive(s_siren);
                 xSemaphoreGive(s_LED);
                 xSemaphoreGive(s_servo);
@@ -278,26 +284,8 @@ void start_motion_sensor(void *pvParameters)
 unsigned long myTime;
 
 
-void motion_sensor(void *pvParameters)
+void motion_sensor(uint32_t id_pir, uint32_t pin_pir, uint32_t virtual_pin, String str_code_blynk, uint32_t position_pir)
 {
-    uint32_t id_pir = (uint32_t)pvParameters;
-    uint32_t pin_pir;
-    uint32_t virtual_pin;
-    String str_code_blynk;
-    uint32_t position_pir;
-    //uint32_t pin_pir = (id_pir==1) ? PIR1_PIN : PIR2_PIN; // per fare un if con assegnamento piu efficiente
-    if (id_pir==1){
-        pin_pir=PIR1_PIN;
-        virtual_pin=V1;
-        str_code_blynk="pir1_triggered";
-        position_pir=180;
-    }
-    else{
-        pin_pir=PIR2_PIN;
-        virtual_pin=V6;
-        str_code_blynk="pir2_triggered";
-        position_pir=0;
-    }
     if(digitalRead(pin_pir))
     {   
         xSemaphoreTake(mutex, portMAX_DELAY);
@@ -367,13 +355,13 @@ void window_sensor(void* pvParameters)
             Blynk.logEvent("window_opened");
             xSemaphoreGive(s_siren);
             xSemaphoreGive(s_LED);
-            if (g.position!=60) { // se è gia in posizione 180 sta gia filmando quindi non serve svegliare videocamera
-                g.position=60; // modifica la posizione
+            if (g.position!=POSITION_WINDOW) { // se è gia in posizione 180 sta gia filmando quindi non serve svegliare videocamera
+                g.position=POSITION_WINDOW; // modifica la posizione
                 xSemaphoreGive(s_servo);
 	        }
         }
-        else if (g.stato == ALARM_TRIGGERED && g.position!=60){ // sveglio il servo per spostare videocamera
-            g.position=60; // modifica la posizione
+        else if (g.stato == ALARM_TRIGGERED && g.position!=POSITION_WINDOW){ // sveglio il servo per spostare videocamera
+            g.position=POSITION_WINDOW; // modifica la posizione
             xSemaphoreGive(s_servo);
             Blynk.setProperty(V2, "color", "#ff0000");
             Blynk.logEvent("window_opened");
@@ -466,7 +454,7 @@ void setup()
 {
     // Unsubscribe idle task from the Task Watchdog Timer
     esp_task_wdt_delete(xTaskGetIdleTaskHandleForCPU(CPU_0));
-    
+
     // Begin WiFi and Blynk connection
     Blynk.begin(auth, ssid, pass);
     Blynk.run();
@@ -489,7 +477,7 @@ void setup()
     Serial.begin(9600);
     Serial.println("Inizio il setup");
     myservo.attach(SERVO_PIN); 
-    g.position=90; // i due sensori devono stare a posizione 180 (pir) e 0 (window), e lo stato iniziale sarà a metà.
+    g.position=POSITION_DEFAULT; // i due sensori devono stare a posizione 180 (pir) e 0 (window), e lo stato iniziale sarà a metà.
     myservo.write(g.position);
     Blynk.virtualWrite(V3,g.position); // possibile errore('?)
 
@@ -604,7 +592,7 @@ void setup()
     xTaskCreatePinnedToCore(
         taskLED,
         "task-LED",
-        20000,
+        10000,
         NULL,
         0, // priority
         NULL,
@@ -680,11 +668,28 @@ void taskMotionSensor(void *pvParameters)
     uint32_t id_pir = (uint32_t)pvParameters;
     Serial.print("Il PIN del PIR è: ");
     Serial.println(id_pir);
+    uint32_t pin_pir;
+    uint32_t virtual_pin;
+    String str_code_blynk;
+    uint32_t position_pir;
+    //uint32_t pin_pir = (id_pir==1) ? PIR1_PIN : PIR2_PIN; // per fare un if con assegnamento piu efficiente
+    if (id_pir==1){
+        pin_pir=PIR1_PIN;
+        virtual_pin=V1;
+        str_code_blynk="pir1_triggered";
+        position_pir=POSITION_PIR1;
+    }
+    else{
+        pin_pir=PIR2_PIN;
+        virtual_pin=V6;
+        str_code_blynk="pir2_triggered";
+        position_pir=POSITION_PIR2;
+    }
     //Serial.begin(4800);
     for (;;)
     {
         start_motion_sensor(pvParameters);
-        motion_sensor((void *)id_pir);
+        motion_sensor(id_pir, pin_pir, virtual_pin, str_code_blynk, position_pir);
 
         #ifdef PRINT_STACK_HWM
         // xSemaphoreTake(mutex, portMAX_DELAY);
