@@ -22,18 +22,16 @@
 FILE *fptr;
 UBaseType_t stackStamp = 0;
 UBaseType_t stackPIN = 0;
-UBaseType_t stackMotion = 0;
+UBaseType_t stackMotion1 = 0;
+UBaseType_t stackMotion2 = 0;
 UBaseType_t stackWindow = 0;
 UBaseType_t stackSiren = 0;
 UBaseType_t stackServo = 0;
 UBaseType_t stackLED = 0;
 UBaseType_t stackBlynk = 0;
 
-// SemaphoreHandle_t stack_mutex = NULL;
-
-//#define PRINT_STACK_HWM
-
-
+// Uncomment this line to print tasks' stack high water mark info periodically
+#define PRINT_STACK_HWM
 
 char auth[] = BLYNK_AUTH_TOKEN;
 
@@ -521,7 +519,7 @@ void setup()
     xTaskCreatePinnedToCore(
         taskStamp,
         "task-stamp",
-        20000, // task overhead: 768 bytes (?)
+        2720, // task overhead: 768 bytes (?)
         NULL,
         0, // priority
         NULL,
@@ -530,7 +528,7 @@ void setup()
     xTaskCreatePinnedToCore(
         taskPin,
         "task-pin",
-        20000,
+        820,
         NULL,
         0, // priority
         NULL,
@@ -539,7 +537,7 @@ void setup()
     xTaskCreatePinnedToCore(
         taskMotionSensor,
         "task-motion-sensor1",
-        20000,
+        2572,
         (void *)1,
         0, // priority
         NULL,
@@ -547,7 +545,7 @@ void setup()
     xTaskCreatePinnedToCore(
         taskMotionSensor,
         "task-motion-sensor2",
-        20000,
+        2572,
         (void *)2,
         0, // priority
         NULL,
@@ -555,7 +553,7 @@ void setup()
     xTaskCreatePinnedToCore(
         taskWindowSensor,
         "task-window-sensor",
-        20000,
+        2540,
         NULL,
         0, // priority
         NULL,
@@ -563,7 +561,7 @@ void setup()
     xTaskCreatePinnedToCore(
         taskSiren,
         "task-siren",
-        20000,
+        748,
         NULL,
         0, // priority
         NULL,
@@ -571,7 +569,7 @@ void setup()
     xTaskCreatePinnedToCore(
         taskServo,
         "task-servo",
-        20000,
+        2572,
         NULL,
         0, // priority
         NULL,
@@ -579,7 +577,7 @@ void setup()
     xTaskCreatePinnedToCore(
         taskLED,
         "task-LED",
-        10000,
+        2660,
         NULL,
         0, // priority
         NULL,
@@ -588,7 +586,7 @@ void setup()
     xTaskCreatePinnedToCore(
         taskBlynk,
         "task-blynk",
-        30000,
+        1456,
         NULL,
         1, // messa con priorità maggiore perchè altrimenti dava problemi con primitiva pbuf_free() e abortiva tutto
         NULL,
@@ -666,7 +664,10 @@ void taskMotionSensor(void *pvParameters)
         motion_sensor(id_pir, pin_pir, virtual_pin, str_code_blynk, position_pir);
 
         #ifdef PRINT_STACK_HWM
-        stackMotion = uxTaskGetStackHighWaterMark(NULL);
+        if (id_pir == 1)
+            stackMotion1 = uxTaskGetStackHighWaterMark(NULL);
+        else
+            stackMotion2 = uxTaskGetStackHighWaterMark(NULL);
         #endif
 
         taskYIELD();
@@ -683,8 +684,6 @@ void taskWindowSensor(void *pvParameters) // This is a task.
         window_sensor(pvParameters);
 
         #ifdef PRINT_STACK_HWM
-        // xSemaphoreTake(mutex, portMAX_DELAY);
-        // Serial.print("Stack high water mark WINDOW: ");
         stackWindow = uxTaskGetStackHighWaterMark(NULL);
         #endif
 
@@ -742,12 +741,13 @@ void taskBlynk(void *pvParameters)
     for (;;)
     {
         Blynk.run();
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+        // vTaskDelay(100 / portTICK_PERIOD_MS);
 
         #ifdef PRINT_STACK_HWM
         stackBlynk = uxTaskGetStackHighWaterMark(NULL);
-        vTaskDelay(20 / portTICK_PERIOD_MS);
         #endif
+
+        vTaskDelay(20 / portTICK_PERIOD_MS);
     }
 }
 
@@ -757,10 +757,12 @@ void loop()
     #ifdef PRINT_STACK_HWM 
     xSemaphoreTake(mutex, portMAX_DELAY);
     Serial.print ("Free Heap: ");      Serial.println(xPortGetMinimumEverFreeHeapSize());
-    // Serial.print ("Heap info: ");      Serial.println(heap_caps_get_info());
+    Serial.print("stackIdle0:\t");     Serial.println(uxTaskGetStackHighWaterMark(xTaskGetIdleTaskHandleForCPU(CPU_0)));
+    Serial.print("stackIdle1:\t");     Serial.println(uxTaskGetStackHighWaterMark(xTaskGetIdleTaskHandleForCPU(1)));
     Serial.print("stackStamp:\t");     Serial.println(stackStamp);
     Serial.print("stackPIN:\t");       Serial.println(stackPIN);
-    Serial.print("stackMotion:\t");    Serial.println(stackMotion);
+    Serial.print("stackMotion1:\t");   Serial.println(stackMotion1);
+    Serial.print("stackMotion2:\t");   Serial.println(stackMotion2);
     Serial.print("stackWindow:\t");    Serial.println(stackWindow);
     Serial.print("stackServo:\t");     Serial.println(stackServo);
     Serial.print("stackSiren:\t");     Serial.println(stackSiren);
