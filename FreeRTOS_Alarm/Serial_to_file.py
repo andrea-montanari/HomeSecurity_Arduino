@@ -10,7 +10,7 @@ while 1:
    data = str(raw_data.decode("utf8"))
    data = data.replace('\r', '')
    print(data)
-   f = open('stack_hwm_stats_init_optimized-3.txt','a')
+   f = open('stack_hwm_stats_init&variables_optimized-3.txt','a')
    if re.search("stack*", data):
       if re.search("stackStamp*", data):
          f.truncate(0)

@@ -21,10 +21,9 @@
 
 
 // Uncomment this line to print tasks' stack high water mark info periodically
-//#define PRINT_STACK_HWM
+#define PRINT_STACK_HWM
 
-#ifdef PRINT_STACK_HMW
-FILE *fptr;
+#ifdef PRINT_STACK_HWM
 UBaseType_t stackStamp = 0;
 UBaseType_t stackPIN = 0;
 UBaseType_t stackMotion1 = 0;
@@ -747,7 +746,7 @@ void taskBlynk(void *pvParameters)
         #ifdef PRINT_STACK_HWM
         stackBlynk = uxTaskGetStackHighWaterMark(NULL);
         #endif
-        vTaskDelay(20 / portTICK_PERIOD_MS);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
         /*
         Serial.print ("Free Heap: ");      
         Serial.println(xPortGetMinimumEverFreeHeapSize());
@@ -760,7 +759,7 @@ void loop()
 {
     #ifdef PRINT_STACK_HWM 
     xSemaphoreTake(mutex, portMAX_DELAY);
-    Serial.print ("Free Heap: ");      Serial.println(xPortGetMinimumEverFreeHeapSize());
+    // Serial.print ("Free Heap: ");      Serial.println(xPortGetMinimumEverFreeHeapSize());
     Serial.print("stackIdle0:\t");     Serial.println(uxTaskGetStackHighWaterMark(xTaskGetIdleTaskHandleForCPU(CPU_0)));
     Serial.print("stackIdle1:\t");     Serial.println(uxTaskGetStackHighWaterMark(xTaskGetIdleTaskHandleForCPU(1)));
     Serial.print("stackStamp:\t");     Serial.println(stackStamp);

@@ -7,3 +7,5 @@
 **/release/*
 **/Secrets.h
 **/build/**
+**/stack.*
+**/*.ipynb.*
