@@ -19,6 +19,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+
+// Uncomment this line to print tasks' stack high water mark info periodically
+//#define PRINT_STACK_HWM
+
+#ifdef PRINT_STACK_HMW
 FILE *fptr;
 UBaseType_t stackStamp = 0;
 UBaseType_t stackPIN = 0;
@@ -29,9 +34,8 @@ UBaseType_t stackSiren = 0;
 UBaseType_t stackServo = 0;
 UBaseType_t stackLED = 0;
 UBaseType_t stackBlynk = 0;
+#endif
 
-// Uncomment this line to print tasks' stack high water mark info periodically
-#define PRINT_STACK_HWM
 
 char auth[] = BLYNK_AUTH_TOKEN;
 
@@ -98,9 +102,9 @@ byte colPins[COLS] = {16, 4, 26, 27}; //connect to the column pinouts of the key
 Keypad customKeypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS);
 Servo myservo;
 
-char true_system_pin[4] = {'0', '0', '0', '0'}; // password giusta del sistema
+char true_system_pin[LENGTH_PIN] = {'0', '0', '0', '0'}; // password giusta del sistema
 char user_pin[LENGTH_PIN];                      // password inserita dall'utente
-int index_pin;                                  // indice per gestire user_pin
+uint8_t index_pin;                                  // indice per gestire user_pin
 
 // Blynk setup
 BlynkTimer timer;
@@ -113,9 +117,9 @@ WidgetLCD lcd(V5);
 // Struttura dati con all'interno gli stati e i bloccati
 struct gestore
 {
-    int stato; // stato dell'allarme = {'OFF','ON','TRIGGERED'}
-    int b_motion_sensor;
-    int position;
+    uint8_t stato; // stato dell'allarme = {'OFF','ON','TRIGGERED'}
+    uint8_t b_motion_sensor;
+    uint8_t position;
 } g;
 
 
@@ -145,7 +149,7 @@ void taskBlynk(void *pvParameters);
  **/
 BLYNK_WRITE (V4)
 {
-  int position = param.asInt();
+  uint8_t position = param.asInt();
   xSemaphoreTake(mutex, portMAX_DELAY);
 
   Serial.print("La pozione è: ");
@@ -161,7 +165,7 @@ BLYNK_WRITE (V4)
 /*funzioni di supporto - usate (e anche non ancora usate) per printare o per controllare */
 bool is_pin_valid(char *user_pin, char *true_system_pin)
 {
-    for (int i = 0; i < LENGTH_PIN; i++)
+    for (uint8_t i = 0; i < LENGTH_PIN; i++)
     {
         if (user_pin[i] != true_system_pin[i])
         {
@@ -180,7 +184,7 @@ void print_user_pin()
         lcd.print(X_start, Y_first_raw, "PIN inserito:");
     }
 
-    for (int k = 0; k < index_pin; k++)
+    for (uint8_t k = 0; k < index_pin; k++)
     {
         //Serial.print("User pin: "); Serial.println(user_pin[k]);
         Serial.print(user_pin[k]);
@@ -254,7 +258,7 @@ void stamp()
             Serial.println(user_pin);
         }
         // rinizializzazione del pin
-        for (int k = 0; k > LENGTH_PIN; k++)
+        for (uint8_t k = 0; k > LENGTH_PIN; k++)
         {
             user_pin[k] = -1;
         }
@@ -282,7 +286,7 @@ void start_motion_sensor(void *pvParameters)
 unsigned long myTime;
 
 
-void motion_sensor(uint32_t id_pir, uint32_t pin_pir, uint32_t virtual_pin, String str_code_blynk, uint32_t position_pir)
+void motion_sensor(uint32_t id_pir, uint8_t pin_pir, uint8_t virtual_pin, char * str_code_blynk, uint8_t position_pir)
 {
     if(digitalRead(pin_pir))
     {   
@@ -290,7 +294,7 @@ void motion_sensor(uint32_t id_pir, uint32_t pin_pir, uint32_t virtual_pin, Stri
         if (g.stato==ALARM_OFF){ // caso particolare in cui, mentre il sensore ha fatto post-previa e ha passato il semaforo, viene modificato lo stato dell'allarme (si esce e si blocca il giro seguente)
             return;
         }
-        Serial.println("-------- MOVIMENTO RILEVATO da PIR!!! -----------");
+        Serial.println("----- MOVIMENTO RILEVATO da PIR!!! -------");
         if (g.stato == ALARM_ON)
         { // se c'è movimento e l'allarme è ON (e non triggered quindi)
             g.stato = ALARM_TRIGGERED;
@@ -315,7 +319,7 @@ void motion_sensor(uint32_t id_pir, uint32_t pin_pir, uint32_t virtual_pin, Stri
         xSemaphoreGive(mutex);
         // Aggiunto delay
         // diminuito di un po' il delay per essere piu responsive (siccome quando si sveglierà, sarà nel periodo LOW)
-        vTaskDelay( 4200 / portTICK_PERIOD_MS); // il delay ha due funzioni: per risolvere il problema del periodo HIGH (vedi video) e per risparmiare cpu durante il periodo low (in cui so per certo che non diventerà HIGH) per limiti fisici PIR
+        vTaskDelay( 4000 / portTICK_PERIOD_MS); // il delay ha due funzioni: per risolvere il problema del periodo HIGH (vedi video) e per risparmiare cpu durante il periodo low (in cui so per certo che non diventerà HIGH) per limiti fisici PIR
         
     }
 }
@@ -345,7 +349,7 @@ void window_sensor(void* pvParameters)
         if (g.stato==ALARM_OFF){ // caso particolare in cui, mentre il sensore ha fatto post-previa e ha passato il semaforo, viene modificato lo stato dell'allarme (si esce e si blocca il giro seguente)
             return;
         }
-        Serial.println("-------- MOVIMENTO RILEVATO da finestra!!! -----------");
+        Serial.println("---- MOVIMENTO RILEVATO da finestra!!! -----");
         if (g.stato==ALARM_ON){ // se c'è movimento e l'allarme è ON (e non triggered quindi)
             g.stato = ALARM_TRIGGERED;
             // per invio informazioni e notifiche ad app blynk
@@ -389,13 +393,13 @@ void siren(void *pvParameters)
     xSemaphoreTake(mutex, portMAX_DELAY);
     if (g.stato == ALARM_TRIGGERED) //deve essere nello stato corretto
     {
-        Serial.println("---------------------------- SIRENA ACCESA ----------------------------!!!");
+        Serial.println("---- SIRENA ACCESA ----!!!");
         //tone(BUZZER_PIN, 1000); // Volendo si può usare la PWM per modificare il tono.
         //digitalWrite(BUZZER_PIN, HIGH);
     }
     else
     {
-        Serial.println("---------------------------- SIRENA ACCESA ----------------------------!!!");
+        Serial.println("---- SIRENA ACCESA ------!!!");
         digitalWrite(BUZZER_PIN, LOW);
     }
     xSemaphoreGive(mutex);
@@ -478,10 +482,10 @@ void setup()
 
 
     g.stato = ALARM_OFF;
-    g.b_motion_sensor = false;
+    g.b_motion_sensor = 0;
 
     // inizializzo i pin
-    for (int k = 0; k > LENGTH_PIN; k++)
+    for (uint8_t k = 0; k > LENGTH_PIN; k++)
     {
         user_pin[k] = -1;
     }
@@ -636,28 +640,27 @@ void taskPin(void *pvParameters)
 
 void taskMotionSensor(void *pvParameters)
 {
-    (void)pvParameters;
-    uint32_t id_pir = (uint32_t)pvParameters;
+    //(void)pvParameters;
+    uint32_t id_pir = (uint32_t)pvParameters; 
     Serial.print("Il PIN del PIR è: ");
     Serial.println(id_pir);
-    uint32_t pin_pir;
-    uint32_t virtual_pin;
-    String str_code_blynk;
-    uint32_t position_pir;
+    uint8_t pin_pir;
+    uint8_t virtual_pin;
+    char str_code_blynk[15];
+    uint8_t position_pir;
     //uint32_t pin_pir = (id_pir==1) ? PIR1_PIN : PIR2_PIN; // per fare un if con assegnamento piu efficiente
     if (id_pir==1){
         pin_pir=PIR1_PIN;
         virtual_pin=V1;
-        str_code_blynk="pir1_triggered";
+        strcpy(str_code_blynk,"pir1_triggered");
         position_pir=POSITION_PIR1;
     }
     else{
         pin_pir=PIR2_PIN;
         virtual_pin=V6;
-        str_code_blynk="pir2_triggered";
+        strcpy(str_code_blynk,"pir2_triggered");
         position_pir=POSITION_PIR2;
     }
-    //Serial.begin(4800);
     for (;;)
     {
         start_motion_sensor(pvParameters);
@@ -741,19 +744,20 @@ void taskBlynk(void *pvParameters)
     for (;;)
     {
         Blynk.run();
-        // vTaskDelay(100 / portTICK_PERIOD_MS);
-
         #ifdef PRINT_STACK_HWM
         stackBlynk = uxTaskGetStackHighWaterMark(NULL);
         #endif
-
         vTaskDelay(20 / portTICK_PERIOD_MS);
+        /*
+        Serial.print ("Free Heap: ");      
+        Serial.println(xPortGetMinimumEverFreeHeapSize());
+        */
+
     }
 }
 
 void loop()
 {
-    
     #ifdef PRINT_STACK_HWM 
     xSemaphoreTake(mutex, portMAX_DELAY);
     Serial.print ("Free Heap: ");      Serial.println(xPortGetMinimumEverFreeHeapSize());
