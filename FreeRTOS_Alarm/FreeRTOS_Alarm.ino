@@ -253,8 +253,10 @@ void stamp()
         }
         else
         {
-            Serial.print("Il pin inserito è SBAGLIATO ");
+            Serial.print("Il pin inserito è SBAGLIATO");
             Serial.println(user_pin);
+            lcd.clear();
+            lcd.print(X_start, Y_first_raw, "PIN errato");
         }
         // rinizializzazione del pin
         for (uint8_t k = 0; k > LENGTH_PIN; k++)
@@ -474,6 +476,7 @@ void setup()
 
     Serial.begin(9600);
     Serial.println("Inizio il setup");
+    Serial.print("Max priorities: "); Serial.println(configMAX_PRIORITIES);
     myservo.attach(SERVO_PIN); 
     g.position=POSITION_DEFAULT; // i due sensori devono stare a posizione 180 (pir) e 0 (window), e lo stato iniziale sarà a metà.
     myservo.write(g.position);
@@ -736,7 +739,7 @@ void taskLED(void *pvParameters)
     }
 }
 
-
+int heap = 0;
 void taskBlynk(void *pvParameters)
 {
     (void)pvParameters;
@@ -746,11 +749,13 @@ void taskBlynk(void *pvParameters)
         #ifdef PRINT_STACK_HWM
         stackBlynk = uxTaskGetStackHighWaterMark(NULL);
         #endif
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-        /*
-        Serial.print ("Free Heap: ");      
-        Serial.println(xPortGetMinimumEverFreeHeapSize());
-        */
+        vTaskDelay(400 / portTICK_PERIOD_MS);
+
+        // if (int(xPortGetMinimumEverFreeHeapSize()) != heap) {
+            heap = int(xPortGetMinimumEverFreeHeapSize());
+            Serial.print ("Free Heap: ");
+            Serial.println(heap);
+        // }
 
     }
 }
