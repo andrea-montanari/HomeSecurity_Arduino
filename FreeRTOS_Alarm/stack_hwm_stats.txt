@@ -1,8 +1,0 @@
-stackStamp:	0
-stackPIN:	19684
-stackMotion:	0
-stackWindow:	0
-stackServo:	0
-stackSiren:	0
-stackLED:	7644
-stackBlynk:	760
