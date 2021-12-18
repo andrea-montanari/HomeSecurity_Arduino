@@ -117,7 +117,7 @@ WidgetLCD lcd(V5);
 struct gestore
 {
     uint8_t stato; // stato dell'allarme = {'OFF','ON','TRIGGERED'}
-    uint8_t b_motion_sensor;
+    uint8_t b_sensor;
     uint8_t position;
 } g;
 
@@ -126,7 +126,7 @@ struct gestore
 SemaphoreHandle_t mutex = NULL;
 SemaphoreHandle_t s_pin = NULL;
 SemaphoreHandle_t s_stamp = NULL;
-SemaphoreHandle_t s_motion_sensor = NULL;
+SemaphoreHandle_t s_sensor = NULL;
 SemaphoreHandle_t s_siren = NULL;
 SemaphoreHandle_t s_LED = NULL;
 SemaphoreHandle_t s_servo = NULL;
@@ -243,10 +243,10 @@ void stamp()
             else
             {
                 g.stato = ALARM_ON;
-                while (g.b_motion_sensor)
+                while (g.b_sensor)
                 {                                                            // siccome ci sono 2 sensori devo svegliarli entrambi
-                    g.b_motion_sensor--;
-                    xSemaphoreGive(s_motion_sensor); //semaforo n-ario
+                    g.b_sensor--;
+                    xSemaphoreGive(s_sensor); //semaforo n-ario
                 }
                 xSemaphoreGive(s_LED);
             }
@@ -274,14 +274,14 @@ void start_motion_sensor(void *pvParameters)
     //Serial.print("semaforo nel motion sensor: "); Serial.println(uxSemaphoreGetCount(s_motion_sensor));
     if (g.stato!=ALARM_OFF) // se allarme è off mi blocco
     {
-        xSemaphoreGive(s_motion_sensor);
+        xSemaphoreGive(s_sensor);
     }
     else
     {
-        g.b_motion_sensor++;
+        g.b_sensor++;
     }
     xSemaphoreGive(mutex);
-    xSemaphoreTake(s_motion_sensor, portMAX_DELAY); // mi blocco qui nel caso
+    xSemaphoreTake(s_sensor, portMAX_DELAY); // mi blocco qui nel caso
 }
 
 unsigned long myTime;
@@ -331,14 +331,14 @@ void start_window_sensor(void *pvParameters)
     //Serial.print("semaforo nel window: "); Serial.println(uxSemaphoreGetCount(s_motion_sensor));
     if (g.stato == ALARM_ON || g.stato == ALARM_TRIGGERED) // se allarme è off mi blocco
     {
-        xSemaphoreGive(s_motion_sensor);
+        xSemaphoreGive(s_sensor);
     }
     else
     {
-        g.b_motion_sensor++;
+        g.b_sensor++;
     }
     xSemaphoreGive(mutex);
-    xSemaphoreTake(s_motion_sensor, portMAX_DELAY); // mi blocco qui nel caso
+    xSemaphoreTake(s_sensor, portMAX_DELAY); // mi blocco qui nel caso
 }
 
 
@@ -484,7 +484,7 @@ void setup()
 
 
     g.stato = ALARM_OFF;
-    g.b_motion_sensor = 0;
+    g.b_sensor = 0;
 
     // inizializzo i pin
     for (uint8_t k = 0; k > LENGTH_PIN; k++)
@@ -505,9 +505,9 @@ void setup()
     {
         s_stamp = xSemaphoreCreateBinary();
     }
-    if (s_motion_sensor == NULL)
+    if (s_sensor == NULL)
     {
-        s_motion_sensor = xSemaphoreCreateCounting( 3, 0 ); // è un semaforo per 3 sensori
+        s_sensor = xSemaphoreCreateCounting( 3, 0 ); // è un semaforo per 3 sensori
     }
     if (s_servo == NULL)
     {
