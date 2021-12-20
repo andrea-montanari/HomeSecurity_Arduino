@@ -3,6 +3,7 @@
 ## Descrizione
 Si è voluto creare un prototipo di allarme domestico che simulasse un appartamento con più stanze al fine di riuscire a rilevare le intrusioni nelle stanze stesse.
 Abbiamo ipotizzato un appartamento schematizzato come segue.
+![Schema](./images/Schema.png)
 
 Le stanze 1 e 2 sono controllate da sensori PIR, mentre la stanza 3 è controllata tramite un bottone che simula l'apertura della finestra.
 È presente anche un servo di 180 gradi che simula una videocamera: quando in una stanza verrà rilevata un'intrusione, la videocamera si ruoterà verso la stanza in cui è probabile che vi sia il ladro.
@@ -38,7 +39,14 @@ TaskBlynk: si occupa di gestire e di tenere aggiornato lo stato del nostro siste
 
 ## Blynk App
 
-Application available on the Play Store for Android Devices on this [link](https://play.google.com/store/apps/details?id=com.app.vetru.mqttdashboard)
+<table>
+  <tr>
+    <td valign="top"><img src="./images/Blynk_01.png"/></td>
+    <td valign="top"><img src="./images/Blynk_02.png"/></td>
+  </tr>
+</table>
+L'applicazione è disponbile su PlayStore a questo [link](https://play.google.com/store/apps/details?id=cc.blynk&hl=it&gl=US)
+
 
 ## Demo
 
