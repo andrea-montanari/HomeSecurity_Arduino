@@ -49,7 +49,7 @@ L'applicazione è disponbile su PlayStore a questo [link](https://play.google.co
 
 
 ## Demo
-
+Video su YouTube: https://www.youtube.com/watch?v=fpsiMFx-kQc
 ## Autori
 
 Pietro Orlandi, Andrea Montanari
