@@ -50,6 +50,9 @@ L'applicazione è disponbile su PlayStore a questo [link](https://play.google.co
 
 ## Demo
 Video su YouTube: https://www.youtube.com/watch?v=fpsiMFx-kQc
+
+È stato infine creato un modellino in legno (figura sotto) per simulare il sistema di allarme in un appartamento con 3 stanze
+![modellino](./images/modellino.jpg)
 ## Autori
 
 Pietro Orlandi, Andrea Montanari
