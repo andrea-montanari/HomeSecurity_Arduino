@@ -16,12 +16,12 @@
 #include "freertos/task.h"
 
 // Risorse per la stampa degli high water mark
-#include <stdio.h>
+//#include <stdio.h>
 #include <stdlib.h>
 
 
 // Uncomment this line to print tasks' stack high water mark info periodically
-#define PRINT_STACK_HWM
+//#define PRINT_STACK_HWM
 
 #ifdef PRINT_STACK_HWM
 UBaseType_t stackStamp = 0;
@@ -396,7 +396,7 @@ void siren(void *pvParameters)
     {
         Serial.println("---- SIRENA ACCESA ----!!!");
         //tone(BUZZER_PIN, 1000); // Volendo si può usare la PWM per modificare il tono.
-        //digitalWrite(BUZZER_PIN, HIGH);
+        digitalWrite(BUZZER_PIN, HIGH);
     }
     else
     {
@@ -648,19 +648,21 @@ void taskMotionSensor(void *pvParameters)
     Serial.println(id_pir);
     uint8_t pin_pir;
     uint8_t virtual_pin;
-    char str_code_blynk[15];
+    char * str_code_blynk;
+    char str_code_blynk1[15]={"pir1_triggered"};
+    char str_code_blynk2[15]={"pir2_triggered"};
     uint8_t position_pir;
     //uint32_t pin_pir = (id_pir==1) ? PIR1_PIN : PIR2_PIN; // per fare un if con assegnamento piu efficiente
     if (id_pir==1){
         pin_pir=PIR1_PIN;
         virtual_pin=V1;
-        strcpy(str_code_blynk,"pir1_triggered");
+        str_code_blynk=str_code_blynk1;
         position_pir=POSITION_PIR1;
     }
     else{
         pin_pir=PIR2_PIN;
         virtual_pin=V6;
-        strcpy(str_code_blynk,"pir2_triggered");
+        str_code_blynk=str_code_blynk2;
         position_pir=POSITION_PIR2;
     }
     for (;;)
@@ -752,9 +754,9 @@ void taskBlynk(void *pvParameters)
         vTaskDelay(400 / portTICK_PERIOD_MS);
 
         // if (int(xPortGetMinimumEverFreeHeapSize()) != heap) {
-            heap = int(xPortGetMinimumEverFreeHeapSize());
-            Serial.print ("Free Heap: ");
-            Serial.println(heap);
+            //heap = int(xPortGetMinimumEverFreeHeapSize());
+            //Serial.print ("Free Heap: ");
+           // Serial.println(heap);
         // }
 
     }
