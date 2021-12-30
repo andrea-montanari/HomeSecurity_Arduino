@@ -268,7 +268,7 @@ void stamp()
     xSemaphoreGive(mutex);
 }
 
-void start_motion_sensor(void *pvParameters)
+void start_motion_sensor()
 {
     xSemaphoreTake(mutex, portMAX_DELAY);
     //Serial.print("semaforo nel motion sensor: "); Serial.println(uxSemaphoreGetCount(s_motion_sensor));
@@ -287,7 +287,7 @@ void start_motion_sensor(void *pvParameters)
 unsigned long myTime;
 
 
-void motion_sensor(uint32_t id_pir, uint8_t pin_pir, uint8_t virtual_pin, char * str_code_blynk, uint8_t position_pir)
+void motion_sensor(uint8_t pin_pir, uint8_t virtual_pin, char * str_code_blynk, uint8_t position_pir)
 {
     if(digitalRead(pin_pir))
     {   
@@ -325,7 +325,7 @@ void motion_sensor(uint32_t id_pir, uint8_t pin_pir, uint8_t virtual_pin, char *
     }
 }
 
-void start_window_sensor(void *pvParameters)
+void start_window_sensor()
 {
     xSemaphoreTake(mutex, portMAX_DELAY);
     //Serial.print("semaforo nel window: "); Serial.println(uxSemaphoreGetCount(s_motion_sensor));
@@ -342,7 +342,7 @@ void start_window_sensor(void *pvParameters)
 }
 
 
-void window_sensor(void* pvParameters)
+void window_sensor()
 {
     if(!digitalRead(WINDOW_PIN))
     {
@@ -374,7 +374,7 @@ void window_sensor(void* pvParameters)
 }
 
 
-void start_servo(void* pvParameters)
+void start_servo()
 {
 	xSemaphoreTake(s_servo, portMAX_DELAY); // mi blocco qui aspettando che mi svegliano i due sensori (nella loro END)
     Serial.println("Il servo si è svegliato!");
@@ -388,7 +388,7 @@ void servo(){
 }
 
 
-void siren(void *pvParameters)
+void siren()
 {
     xSemaphoreTake(s_siren, portMAX_DELAY);
     xSemaphoreTake(mutex, portMAX_DELAY);
@@ -406,7 +406,7 @@ void siren(void *pvParameters)
     xSemaphoreGive(mutex);
 }
 
-void statusLED(void *pvParameters)
+void statusLED()
 {
     xSemaphoreTake(s_LED, portMAX_DELAY);
     // Critical section da tenere?
@@ -667,8 +667,8 @@ void taskMotionSensor(void *pvParameters)
     }
     for (;;)
     {
-        start_motion_sensor(pvParameters);
-        motion_sensor(id_pir, pin_pir, virtual_pin, str_code_blynk, position_pir);
+        start_motion_sensor();
+        motion_sensor(pin_pir, virtual_pin, str_code_blynk, position_pir);
 
         #ifdef PRINT_STACK_HWM
         if (id_pir == 1)
@@ -687,8 +687,8 @@ void taskWindowSensor(void *pvParameters) // This is a task.
 
     for (;;)
     {
-        start_window_sensor(pvParameters);
-        window_sensor(pvParameters);
+        start_window_sensor();
+        window_sensor();
 
         #ifdef PRINT_STACK_HWM
         stackWindow = uxTaskGetStackHighWaterMark(NULL);
@@ -706,7 +706,7 @@ void taskServo(void *pvParameters) // This is a task.
 
     for (;;)
     {
-        start_servo(pvParameters);
+        start_servo();
         servo();
 
         #ifdef PRINT_STACK_HWM
@@ -720,7 +720,7 @@ void taskSiren(void *pvParameters)
     (void)pvParameters;
     for (;;)
     {
-        siren(pvParameters);
+        siren();
 
         #ifdef PRINT_STACK_HWM
         stackSiren = uxTaskGetStackHighWaterMark(NULL);
@@ -733,7 +733,7 @@ void taskLED(void *pvParameters)
     (void)pvParameters;
     for (;;)
     {
-        statusLED(pvParameters);
+        statusLED();
 
         #ifdef PRINT_STACK_HWM
         stackLED = uxTaskGetStackHighWaterMark(NULL);
