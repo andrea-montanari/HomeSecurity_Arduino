@@ -55,4 +55,5 @@ Video su YouTube: https://www.youtube.com/watch?v=fpsiMFx-kQc
 ![modellino](./images/modellino.jpg)
 ## Autori
 
-Pietro Orlandi, Andrea Montanari
+[Pietro Orlandi](https://github.com/pietroorlandi) <br>
+[Andrea Montanari](https://github.com/andrea-montanari)
