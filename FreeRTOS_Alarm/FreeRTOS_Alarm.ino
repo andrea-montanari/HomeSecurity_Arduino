@@ -36,11 +36,11 @@ UBaseType_t stackBlynk = 0;
 #endif
 
 
-char auth[] = BLYNK_AUTH_TOKEN;
+const char auth[] = BLYNK_AUTH_TOKEN;
 
 // WiFi credentials.
-char ssid[] = SECRET_SSID;
-char pass[] = SECRET_PSW;
+const char ssid[] = SECRET_SSID;
+const char pass[] = SECRET_PSW;
 
 #define INCLUDE_vTaskSuspend 1
 
