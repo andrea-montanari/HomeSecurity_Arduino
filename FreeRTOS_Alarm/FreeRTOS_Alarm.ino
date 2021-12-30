@@ -679,7 +679,7 @@ void taskMotionSensor(void *pvParameters)
         pin_pir=PIR1_PIN;
         virtual_pin=V1;
         str_code_blynk=str_code_blynk1;
-        position_pir=POSITION_PIR1;
+        position_pir=(uint32_t)POSITION_PIR1;
     }
     else{
         pin_pir=PIR2_PIN;
