@@ -77,6 +77,10 @@ char pass[] = SECRET_PSW;
 #define MAX_COLOR_INTENSITY 255
 #define MIN_COLOR_INTENSITY 0
 
+// WIFI and Blynk connection
+#define WIFI_CONNECTION_TRIES 30 // Number of tries before aborting WiFi connection
+#define BLYNK_CONNECTION_TIMEOUT 10000
+
 #define noTone 0
 
 // CPUs
@@ -456,14 +460,33 @@ void setup()
     // Unsubscribe idle task from the Task Watchdog Timer
     esp_task_wdt_delete(xTaskGetIdleTaskHandleForCPU(CPU_0));
 
-    // Begin WiFi and Blynk connection
-    Blynk.begin(auth, ssid, pass);
-    Blynk.run();
-    // Accensione LED su Blynk
-    led_alarm_blynk.on();
-    led_pir1_blynk.on();
-    led_pir2_blynk.on();
-    led_window_blynk.on();
+    Serial.begin(9600);
+    Serial.println("Inizio il setup");
+
+    // WiFi and Blynk conenction
+    uint8_t connection_tries = 0;
+    WiFi.begin(ssid, pass);
+    Serial.print("Connecting to WiFi...");
+    while (WiFi.status() != WL_CONNECTED && connection_tries < WIFI_CONNECTION_TRIES) {
+        delay(500);
+        connection_tries++;
+        Serial.println(".");
+    }
+    if (WiFi.status() != WL_CONNECTED) {
+        WiFi.disconnect(); // Stop trying to connect
+        Serial.println("Not connected - check ssid, pwd and network connection");
+    }
+    else {
+        Serial.println("\nConnected");
+        Blynk.config(auth);
+        Blynk.connect(BLYNK_CONNECTION_TIMEOUT);
+
+        // Accensione LED su Blynk
+        led_alarm_blynk.on();
+        led_pir1_blynk.on();
+        led_pir2_blynk.on();
+        led_window_blynk.on();
+    }
 
     pinMode(PIR1_PIN, INPUT);
     pinMode(PIR2_PIN, INPUT);
@@ -471,11 +494,8 @@ void setup()
     pinMode(RED_LED, OUTPUT);
     pinMode(GREEN_LED, OUTPUT);
     pinMode(BLUE_LED, OUTPUT);
-    pinMode(WINDOW_PIN, INPUT_PULLUP);  
+    pinMode(WINDOW_PIN, INPUT_PULLUP); 
 
-
-    Serial.begin(9600);
-    Serial.println("Inizio il setup");
     Serial.print("Max priorities: "); Serial.println(configMAX_PRIORITIES);
     myservo.attach(SERVO_PIN); 
     g.position=POSITION_DEFAULT; // i due sensori devono stare a posizione 180 (pir) e 0 (window), e lo stato iniziale sarà a metà.
@@ -589,14 +609,16 @@ void setup()
         NULL,
         1);  
         
-    xTaskCreatePinnedToCore(
-        taskBlynk,
-        "task-blynk",
-        1456,
-        NULL,
-        1, // messa con priorità maggiore perchè altrimenti dava problemi con primitiva pbuf_free() e abortiva tutto
-        NULL,
-        0);
+    if (WiFi.status() == WL_CONNECTED) {
+        xTaskCreatePinnedToCore(
+            taskBlynk,
+            "task-blynk",
+            1456,
+            NULL,
+            1, // messa con priorità maggiore perchè altrimenti dava problemi con primitiva pbuf_free() e abortiva tutto
+            NULL,
+            0);
+    }
        
     
     // First lighting of the LED
@@ -741,10 +763,10 @@ void taskLED(void *pvParameters)
     }
 }
 
-int heap = 0;
 void taskBlynk(void *pvParameters)
 {
     (void)pvParameters;
+    
     for (;;)
     {
         Blynk.run();
