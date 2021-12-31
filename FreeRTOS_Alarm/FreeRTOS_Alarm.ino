@@ -168,7 +168,7 @@ BLYNK_WRITE (V4)
 /*funzioni di supporto - usate (e anche non ancora usate) per printare o per controllare */
 bool is_pin_valid(char *user_pin, char *true_system_pin)
 {
-    for (uint8_t i = 0; i < LENGTH_PIN; i++)
+    for (uint8_t i = 0; i < uint8_t(LENGTH_PIN); i++)
     {
         if (user_pin[i] != true_system_pin[i])
         {
@@ -182,7 +182,7 @@ bool is_pin_valid(char *user_pin, char *true_system_pin)
 void print_user_pin()
 {
     String lcd_string = "";
-    if (index_pin == 1) {
+    if (index_pin == 1U) {
         lcd.clear();
         lcd.print(X_start, Y_first_raw, "PIN inserito:");
     }
@@ -195,7 +195,7 @@ void print_user_pin()
         //Serial.print("Stringa: "); Serial.println(lcd_string);
     }
     lcd.print(X_start, Y_second_raw, lcd_string);
-    if (index_pin > 0) {
+    if (index_pin > 0U) {
         Serial.print('\n'); // così si risparmiano delle stampe
     }
 }
@@ -221,7 +221,7 @@ void stamp()
     xSemaphoreTake(s_stamp, portMAX_DELAY);
     xSemaphoreTake(mutex, portMAX_DELAY);
     print_user_pin();
-    if (index_pin == 4)
+    if (index_pin == 4U)
     {
         bool valid_pin = is_pin_valid(user_pin, true_system_pin); // check del pin con "0000"
         // Switch case per essere più efficienti??
@@ -264,7 +264,7 @@ void stamp()
             lcd.print(X_start, Y_first_raw, "PIN errato");
         }
         // rinizializzazione del pin
-        for (uint8_t k = 0; k > LENGTH_PIN; k++)
+        for (uint8_t k = 0; k > (uint8_t)LENGTH_PIN; k++)
         {
             user_pin[k] = -1;
         }
@@ -468,7 +468,7 @@ void setup()
     uint8_t connection_tries = 0;
     WiFi.begin(ssid, pass);
     Serial.print("Connecting to WiFi...");
-    while (WiFi.status() != WL_CONNECTED && connection_tries < WIFI_CONNECTION_TRIES) {
+    while (WiFi.status() != WL_CONNECTED && connection_tries < (uint8_t)WIFI_CONNECTION_TRIES) {
         delay(500);
         connection_tries++;
         Serial.println(".");
@@ -508,7 +508,7 @@ void setup()
     g.b_sensor = 0;
 
     // inizializzo i pin
-    for (uint8_t k = 0; k > LENGTH_PIN; k++)
+    for (uint8_t k = 0; k > (uint8_t)LENGTH_PIN; k++)
     {
         user_pin[k] = -1;
     }
@@ -676,7 +676,7 @@ void taskMotionSensor(void *pvParameters)
     char str_code_blynk2[15]={"pir2_triggered"};
     uint8_t position_pir;
     //uint32_t pin_pir = (id_pir==1) ? PIR1_PIN : PIR2_PIN; // per fare un if con assegnamento piu efficiente
-    if (id_pir==1){
+    if (id_pir==1U){
         pin_pir=PIR1_PIN;
         virtual_pin=V1;
         str_code_blynk=str_code_blynk1;
@@ -694,7 +694,7 @@ void taskMotionSensor(void *pvParameters)
         motion_sensor(pin_pir, virtual_pin, str_code_blynk, position_pir);
 
         #ifdef PRINT_STACK_HWM
-        if (id_pir == 1) {
+        if (id_pir == 1U) {
             stackMotion1 = uxTaskGetStackHighWaterMark(NULL);
         }
         else {
