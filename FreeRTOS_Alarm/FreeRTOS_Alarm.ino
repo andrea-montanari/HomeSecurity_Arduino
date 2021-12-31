@@ -195,8 +195,9 @@ void print_user_pin()
         //Serial.print("Stringa: "); Serial.println(lcd_string);
     }
     lcd.print(X_start, Y_second_raw, lcd_string);
-    if (index_pin > 0)
+    if (index_pin > 0) {
         Serial.print('\n'); // così si risparmiano delle stampe
+    }
 }
 
 void get_pin()
@@ -693,10 +694,12 @@ void taskMotionSensor(void *pvParameters)
         motion_sensor(pin_pir, virtual_pin, str_code_blynk, position_pir);
 
         #ifdef PRINT_STACK_HWM
-        if (id_pir == 1)
+        if (id_pir == 1) {
             stackMotion1 = uxTaskGetStackHighWaterMark(NULL);
-        else
+        }
+        else {
             stackMotion2 = uxTaskGetStackHighWaterMark(NULL);
+        }
         #endif
 
         taskYIELD();
