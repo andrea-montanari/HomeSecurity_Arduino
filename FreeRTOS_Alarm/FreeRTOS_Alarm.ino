@@ -21,7 +21,7 @@
 
 
 // Uncomment this line to print tasks' stack high water mark info periodically
-//#define PRINT_STACK_HWM
+// #define PRINT_STACK_HWM
 
 #ifdef PRINT_STACK_HWM
 UBaseType_t stackStamp = 0;
@@ -202,7 +202,7 @@ void print_user_pin()
 void get_pin()
 {
     char customKey = customKeypad.getKey(); // non posso fare il controllo direttamente altrimenti perderei il valore se non lo salvo prima
-    if (customKey)
+    if (customKey != NO_KEY)
     {
         xSemaphoreTake(mutex, portMAX_DELAY);
         user_pin[index_pin] = customKey; // possibile race conditions su shared variable (per questo usato mutex)
@@ -247,7 +247,7 @@ void stamp()
             else
             {
                 g.stato = ALARM_ON;
-                while (g.b_sensor)
+                while (g.b_sensor > 0)
                 {                                                            // siccome ci sono 2 sensori devo svegliarli entrambi
                     g.b_sensor--;
                     xSemaphoreGive(s_sensor); //semaforo n-ario
@@ -293,7 +293,7 @@ unsigned long myTime;
 
 void motion_sensor(uint8_t pin_pir, uint8_t virtual_pin, char * str_code_blynk, uint8_t position_pir)
 {
-    if(digitalRead(pin_pir))
+    if(digitalRead(pin_pir) != 0)
     {   
         xSemaphoreTake(mutex, portMAX_DELAY);
         if (g.stato==ALARM_OFF){ // caso particolare in cui, mentre il sensore ha fatto post-previa e ha passato il semaforo, viene modificato lo stato dell'allarme (si esce e si blocca il giro seguente)
