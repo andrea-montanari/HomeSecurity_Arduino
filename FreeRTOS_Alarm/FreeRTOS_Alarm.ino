@@ -322,6 +322,9 @@ void motion_sensor(uint8_t pin_pir, uint8_t virtual_pin, char * str_code_blynk, 
             Blynk.setProperty(virtual_pin, "color", "#ff0000");
             Blynk.logEvent(str_code_blynk);
         }
+        else {
+            Serial.println("ERRORE: stato del sistema non valido!!!");
+        }
         xSemaphoreGive(mutex);
         // Aggiunto delay
         // diminuito di un po' il delay per essere piu responsive (siccome quando si sveglierà, sarà nel periodo LOW)
@@ -373,6 +376,9 @@ void window_sensor()
             xSemaphoreGive(s_servo);
             Blynk.setProperty(V2, "color", "#ff0000");
             Blynk.logEvent("window_opened");
+        }
+        else {
+            Serial.println("ERRORE: stato del sistema non valido!!!");
         }
 	    xSemaphoreGive(mutex);
     }
@@ -450,6 +456,10 @@ void statusLED()
         Blynk.setProperty(V0, "label", "ALARM TRIGGERED");
         Blynk.logEvent("ALARM_TRIGGERED");
         break;
+
+    default:
+        Serial.println("ERRORE: stato del sistema non valido!!!");
+        break;
     }
     xSemaphoreGive(mutex);
     
@@ -467,7 +477,7 @@ void setup()
     // WiFi and Blynk conenction
     uint8_t connection_tries = 0;
     WiFi.begin(ssid, pass);
-    Serial.print("Connecting to WiFi...");
+    Serial.println("Connecting to WiFi...");
     while (WiFi.status() != WL_CONNECTED && connection_tries < (uint8_t)WIFI_CONNECTION_TRIES) {
         delay(500);
         connection_tries++;
@@ -497,7 +507,6 @@ void setup()
     pinMode(BLUE_LED, OUTPUT);
     pinMode(WINDOW_PIN, INPUT_PULLUP); 
 
-    Serial.print("Max priorities: "); Serial.println(configMAX_PRIORITIES);
     myservo.attach(SERVO_PIN); 
     g.position=POSITION_DEFAULT; // i due sensori devono stare a posizione 180 (pir) e 0 (window), e lo stato iniziale sarà a metà.
     myservo.write(g.position);
@@ -561,19 +570,22 @@ void setup()
         NULL,
         1);
 
+    uint8_t motion_sensor_1_id = 1;
     xTaskCreatePinnedToCore(
         taskMotionSensor,
         "task-motion-sensor1",
         2572,
-        (void *)1,
+        (void *)&motion_sensor_1_id,
         0, // priority
         NULL,
         1);
+
+    uint8_t motion_sensor_2_id = 2;
     xTaskCreatePinnedToCore(
         taskMotionSensor,
         "task-motion-sensor2",
         2572,
-        (void *)2,
+        (void *)&motion_sensor_2_id,
         0, // priority
         NULL,
         1);
@@ -666,7 +678,8 @@ void taskPin(void *pvParameters)
 void taskMotionSensor(void *pvParameters)
 {
     //(void)pvParameters;
-    uint32_t id_pir = (uint32_t)pvParameters; 
+    uint8_t id_pir = *((uint8_t *)pvParameters); 
+    Serial.print("id_pir: "); Serial.println(id_pir);
     Serial.print("Il PIN del PIR è: ");
     Serial.println(id_pir);
     uint8_t pin_pir;
