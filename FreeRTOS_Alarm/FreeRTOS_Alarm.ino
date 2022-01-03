@@ -168,14 +168,16 @@ BLYNK_WRITE (V4)
 /*funzioni di supporto - usate (e anche non ancora usate) per printare o per controllare */
 bool is_pin_valid(char *user_pin, char *true_system_pin)
 {
+    bool val=true;
     for (uint8_t i = 0; i < uint8_t(LENGTH_PIN); i++)
     {
         if (user_pin[i] != true_system_pin[i])
         {
-            return false;
-        } // appena trova un elemento diverso ritorna false senza controllare gli altri
+            val=false;
+            break;
+        } // appena trova un elemento diverso esce dal ciclo
     }
-    return true;
+    return val;
 }
 
 // usata per printare solamente fino all'indice a cui siamo arrivati
@@ -297,12 +299,9 @@ void motion_sensor(uint8_t pin_pir, uint8_t virtual_pin, char * str_code_blynk, 
     if(digitalRead(pin_pir) != 0)
     {   
         xSemaphoreTake(mutex, portMAX_DELAY);
-        if (g.stato==ALARM_OFF){ // caso particolare in cui, mentre il sensore ha fatto post-previa e ha passato il semaforo, viene modificato lo stato dell'allarme (si esce e si blocca il giro seguente)
-            return;
-        }
-        Serial.println("----- MOVIMENTO RILEVATO da PIR!!! -------");
         if (g.stato == ALARM_ON)
         { // se c'è movimento e l'allarme è ON (e non triggered quindi)
+            Serial.println("----- MOVIMENTO RILEVATO da PIR!!! -------");
             g.stato = ALARM_TRIGGERED;
             // per invio informazioni e notifiche ad app blynk
             Blynk.setProperty(virtual_pin, "color", "#ff0000");
@@ -315,8 +314,9 @@ void motion_sensor(uint8_t pin_pir, uint8_t virtual_pin, char * str_code_blynk, 
                 xSemaphoreGive(s_servo);
             }
         }
-        else if (g.stato == ALARM_TRIGGERED && g.position != position_pir)
+        else if ( (g.stato == ALARM_TRIGGERED) && (g.position != position_pir) )
         {                     // sveglio il servo per spostare videocamera
+            Serial.println("----- MOVIMENTO RILEVATO da PIR!!! -------");
             g.position = position_pir; // modifica la posizione
             xSemaphoreGive(s_servo);
             Blynk.setProperty(virtual_pin, "color", "#ff0000");
@@ -334,7 +334,7 @@ void start_window_sensor()
 {
     xSemaphoreTake(mutex, portMAX_DELAY);
     //Serial.print("semaforo nel window: "); Serial.println(uxSemaphoreGetCount(s_motion_sensor));
-    if (g.stato == ALARM_ON || g.stato == ALARM_TRIGGERED) // se allarme è off mi blocco
+    if ( (g.stato == ALARM_ON) || (g.stato == ALARM_TRIGGERED) ) // se allarme è off mi blocco
     {
         xSemaphoreGive(s_sensor);
     }
@@ -352,11 +352,8 @@ void window_sensor()
     if(!digitalRead(WINDOW_PIN))
     {
         xSemaphoreTake(mutex, portMAX_DELAY);
-        if (g.stato==ALARM_OFF){ // caso particolare in cui, mentre il sensore ha fatto post-previa e ha passato il semaforo, viene modificato lo stato dell'allarme (si esce e si blocca il giro seguente)
-            return;
-        }
-        Serial.println("---- MOVIMENTO RILEVATO da finestra!!! -----");
         if (g.stato==ALARM_ON){ // se c'è movimento e l'allarme è ON (e non triggered quindi)
+            Serial.println("---- MOVIMENTO RILEVATO da finestra!!! -----");
             g.stato = ALARM_TRIGGERED;
             // per invio informazioni e notifiche ad app blynk
             Blynk.setProperty(V2, "color", "#ff0000");
@@ -368,7 +365,8 @@ void window_sensor()
                 xSemaphoreGive(s_servo);
 	        }
         }
-        else if (g.stato == ALARM_TRIGGERED && g.position!=POSITION_WINDOW){ // sveglio il servo per spostare videocamera
+        else if ( (g.stato == ALARM_TRIGGERED) && (g.position!=POSITION_WINDOW) ){ // sveglio il servo per spostare videocamera
+            Serial.println("---- MOVIMENTO RILEVATO da finestra!!! -----");
             g.position=POSITION_WINDOW; // modifica la posizione
             xSemaphoreGive(s_servo);
             Blynk.setProperty(V2, "color", "#ff0000");
@@ -468,7 +466,7 @@ void setup()
     uint8_t connection_tries = 0;
     WiFi.begin(ssid, pass);
     Serial.print("Connecting to WiFi...");
-    while (WiFi.status() != WL_CONNECTED && connection_tries < (uint8_t)WIFI_CONNECTION_TRIES) {
+    while ( (WiFi.status() != WL_CONNECTED) && (connection_tries < (uint8_t)WIFI_CONNECTION_TRIES) ) {
         delay(500);
         connection_tries++;
         Serial.println(".");
@@ -672,8 +670,10 @@ void taskMotionSensor(void *pvParameters)
     uint8_t pin_pir;
     uint8_t virtual_pin;
     char * str_code_blynk;
-    char str_code_blynk1[15]={"pir1_triggered"};
-    char str_code_blynk2[15]={"pir2_triggered"};
+    // char a[] = "abc"; // equivalent to char a[4] = {'a', 'b', 'c', '\0'};
+    
+    char str_code_blynk1[15]={'p','i','r','1','_','t','r','i','g','g','e','r','e','d','\0'};
+    char str_code_blynk2[15]={'p','i','r','2','_','t','r','i','g','g','e','r','e','d','\0'};
     uint8_t position_pir;
     //uint32_t pin_pir = (id_pir==1) ? PIR1_PIN : PIR2_PIN; // per fare un if con assegnamento piu efficiente
     if (id_pir==1U){
