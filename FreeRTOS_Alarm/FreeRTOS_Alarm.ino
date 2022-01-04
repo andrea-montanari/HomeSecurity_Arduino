@@ -14,6 +14,7 @@ UBaseType_t stackLED = 0;
 UBaseType_t stackBlynk = 0;
 #endif
 
+
 const char *auth = BLYNK_AUTH_TOKEN;
 
 // WiFi credentials.
@@ -185,6 +186,7 @@ void stamp()
         index_pin = 0;
     }
     xSemaphoreGive(mutex);
+
 }
 
 void start_motion_sensor()
@@ -206,6 +208,7 @@ void start_motion_sensor()
 
 void motion_sensor(uint8_t pin_pir, uint8_t virtual_pin, char * str_code_blynk, uint8_t position_pir)
 {
+
     if(digitalRead(pin_pir) != 0)
     {   
         xSemaphoreTake(mutex, portMAX_DELAY);
@@ -238,7 +241,7 @@ void motion_sensor(uint8_t pin_pir, uint8_t virtual_pin, char * str_code_blynk, 
         xSemaphoreGive(mutex);
         // Aggiunto delay
         // diminuito di un po' il delay per essere piu responsive (siccome quando si sveglierà, sarà nel periodo LOW)
-        vTaskDelay( 4000 / portTICK_PERIOD_MS); // il delay ha due funzioni: per risolvere il problema del periodo HIGH (vedi video) e per risparmiare cpu durante il periodo low (in cui so per certo che non diventerà HIGH) per limiti fisici PIR
+        vTaskDelay( 3400 / portTICK_PERIOD_MS); // il delay ha due funzioni: per risolvere il problema del periodo HIGH (vedi video) e per risparmiare cpu durante il periodo low (in cui so per certo che non diventerà HIGH) per limiti fisici PIR
         
     }
 }
@@ -255,7 +258,7 @@ void start_window_sensor()
     {
         g.b_sensor++;
     }
-    xSemaphoreGive(mutex);
+    xSemaphoreGive(mutex);   
     xSemaphoreTake(s_sensor, portMAX_DELAY); // mi blocco qui nel caso
 }
 
@@ -308,21 +311,20 @@ void servo(){
 
 
 void siren()
-{
+{    
     xSemaphoreTake(s_siren, portMAX_DELAY);
     xSemaphoreTake(mutex, portMAX_DELAY);
     if (g.stato == ALARM_TRIGGERED) //deve essere nello stato corretto
     {
         Serial.println("---- SIRENA ACCESA ----!!!");
-        //tone(BUZZER_PIN, 1000); // Volendo si può usare la PWM per modificare il tono.
         digitalWrite(BUZZER_PIN, HIGH);
     }
     else
     {
-        Serial.println("---- SIRENA ACCESA ------!!!");
         digitalWrite(BUZZER_PIN, LOW);
     }
     xSemaphoreGive(mutex);
+
 }
 
 void statusLED()
@@ -370,6 +372,7 @@ void statusLED()
         break;
     }
     xSemaphoreGive(mutex);
+
     
 }
 
@@ -460,21 +463,22 @@ void setup()
         s_LED = xSemaphoreCreateBinary();
     }
     
+    // ho aggiunto 200 a tutti (tranne il blynk) i tasksize, quindi per vedere come era prima , basta che fai - 200 a tutti
     xTaskCreatePinnedToCore(
         taskStamp,
         "task-stamp",
-        2720, // task overhead: 768 bytes (?)
+        2920, // task overhead: 768 bytes (?)
         NULL,
-        0, // priority
+        1, // priority
         NULL,
         1); // Core
 
     xTaskCreatePinnedToCore(
         taskPin,
         "task-pin",
-        820,
+        1020,
         NULL,
-        0, // priority
+        1, // priority
         NULL,
         1);
 
@@ -482,9 +486,9 @@ void setup()
     xTaskCreatePinnedToCore(
         taskMotionSensor,
         "task-motion-sensor1",
-        2572,
+        2772,
         (void *)&motion_sensor_1_id,
-        0, // priority
+        1, // priority
         NULL,
         1);
 
@@ -492,41 +496,41 @@ void setup()
     xTaskCreatePinnedToCore(
         taskMotionSensor,
         "task-motion-sensor2",
-        2572,
+        2772,
         (void *)&motion_sensor_2_id,
-        0, // priority
+        1, // priority
         NULL,
         1);
     xTaskCreatePinnedToCore(
         taskWindowSensor,
         "task-window-sensor",
-        2540,
+        2740,
         NULL,
-        0, // priority
+        1, // priority
         NULL,
         1);
     xTaskCreatePinnedToCore(
         taskSiren,
         "task-siren",
-        748,
+        948,
         NULL,
-        0, // priority
+        1, // priority
         NULL,
         1);
     xTaskCreatePinnedToCore(
         taskServo,
         "task-servo",
-        2572,
+        2772,
         NULL,
-        0, // priority
+        1, // priority
         NULL,
         1);
     xTaskCreatePinnedToCore(
         taskLED,
         "task-LED",
-        2660,
+        2860,
         NULL,
-        0, // priority
+        1, // priority
         NULL,
         1);  
         
@@ -556,11 +560,13 @@ void setup()
 void taskStamp(void *pvParameters) // This is a task.
 {
     (void)pvParameters;
-
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = 400 / portTICK_PERIOD_MS; // periodo di 200 ms
+    xLastWakeTime = xTaskGetTickCount();
     for (;;)
     {
         stamp();
-
+        xLastWakeTime = xTaskGetTickCount();
         #ifdef PRINT_STACK_HWM
         stackStamp = uxTaskGetStackHighWaterMark(NULL);
         #endif
@@ -570,11 +576,14 @@ void taskStamp(void *pvParameters) // This is a task.
 
 void taskPin(void *pvParameters)
 {
-    //(void)pvParameters;
+    (void)pvParameters;
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = 50 / portTICK_PERIOD_MS; // periodo di 200 ms
+    xLastWakeTime = xTaskGetTickCount();
     for (;;)
     {
         get_pin();
-
+        vTaskDelayUntil(&xLastWakeTime, xFrequency); 
         #ifdef PRINT_STACK_HWM
         stackPIN = uxTaskGetStackHighWaterMark(NULL);
         #endif
@@ -585,7 +594,9 @@ void taskPin(void *pvParameters)
 
 void taskMotionSensor(void *pvParameters)
 {
-    //(void)pvParameters;
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = 700 / portTICK_PERIOD_MS; // periodo di 200 ms
+    xLastWakeTime = xTaskGetTickCount();
     uint8_t id_pir = *((uint8_t *)pvParameters); 
     Serial.print("id_pir: "); Serial.println(id_pir);
     Serial.print("Il PIN del PIR è: ");
@@ -615,7 +626,7 @@ void taskMotionSensor(void *pvParameters)
     {
         start_motion_sensor();
         motion_sensor(pin_pir, virtual_pin, str_code_blynk, position_pir);
-
+        vTaskDelayUntil(&xLastWakeTime, xFrequency); 
         #ifdef PRINT_STACK_HWM
         if (id_pir == 1U) {
             stackMotion1 = uxTaskGetStackHighWaterMark(NULL);
@@ -632,12 +643,14 @@ void taskMotionSensor(void *pvParameters)
 void taskWindowSensor(void *pvParameters) // This is a task.
 {
     (void)pvParameters;
-
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = 150 / portTICK_PERIOD_MS; // periodo di 200 ms
+    xLastWakeTime = xTaskGetTickCount();
     for (;;)
     {
         start_window_sensor();
         window_sensor();
-
+        vTaskDelayUntil(&xLastWakeTime, xFrequency); 
         #ifdef PRINT_STACK_HWM
         stackWindow = uxTaskGetStackHighWaterMark(NULL);
         #endif
@@ -651,11 +664,14 @@ void taskWindowSensor(void *pvParameters) // This is a task.
 void taskServo(void *pvParameters) // This is a task.
 {
     (void)pvParameters;
-
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = 300 / portTICK_PERIOD_MS; // periodo di 200 ms
+    xLastWakeTime = xTaskGetTickCount();
     for (;;)
     {
         start_servo();
         servo();
+        vTaskDelayUntil(&xLastWakeTime, xFrequency); 
 
         #ifdef PRINT_STACK_HWM
         stackServo = uxTaskGetStackHighWaterMark(NULL);
@@ -666,10 +682,13 @@ void taskServo(void *pvParameters) // This is a task.
 void taskSiren(void *pvParameters)
 {
     (void)pvParameters;
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = 300 / portTICK_PERIOD_MS; // periodo di 200 ms
+    xLastWakeTime = xTaskGetTickCount();
     for (;;)
     {
         siren();
-
+        vTaskDelayUntil(&xLastWakeTime, xFrequency); 
         #ifdef PRINT_STACK_HWM
         stackSiren = uxTaskGetStackHighWaterMark(NULL);
         #endif
@@ -679,10 +698,13 @@ void taskSiren(void *pvParameters)
 void taskLED(void *pvParameters)
 {
     (void)pvParameters;
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = 300 / portTICK_PERIOD_MS; // periodo di 200 ms
+    xLastWakeTime = xTaskGetTickCount();
     for (;;)
     {
         statusLED();
-
+        vTaskDelayUntil(&xLastWakeTime, xFrequency); 
         #ifdef PRINT_STACK_HWM
         stackLED = uxTaskGetStackHighWaterMark(NULL);
         #endif
