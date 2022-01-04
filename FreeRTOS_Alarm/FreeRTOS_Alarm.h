@@ -39,11 +39,11 @@ extern UBaseType_t stackBlynk;
 #endif
 
 
-extern const char auth[];
+extern const char *auth;
 
 // WiFi credentials.
-extern const char ssid[];
-extern const char pass[];
+extern const char *ssid;
+extern const char *pass;
 
 #define INCLUDE_vTaskSuspend 1
 

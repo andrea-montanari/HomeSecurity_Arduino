@@ -14,11 +14,11 @@ UBaseType_t stackLED = 0;
 UBaseType_t stackBlynk = 0;
 #endif
 
-const char auth[] = BLYNK_AUTH_TOKEN;
+const char *auth = BLYNK_AUTH_TOKEN;
 
 // WiFi credentials.
-const char ssid[] = SECRET_SSID;
-const char pass[] = SECRET_PSW;
+const char *ssid = SECRET_SSID;
+const char *pass = SECRET_PSW;
 
 // Setup del keypad
 char hexaKeys[ROWS][COLS] = { // Per il Pin
