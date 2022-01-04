@@ -1,27 +1,6 @@
-#include <dummy.h>
+#include "FreeRTOS_Alarm.h"
 
-#include "Secrets.h"
-#define BLYNK_TEMPLATE_ID SECRET_BLYNK_TEMPLATE_ID
-#define BLYNK_DEVICE_NAME SECRET_BLYNK_DEVICE_NAME
-#define BLYNK_AUTH_TOKEN SECRET_BLYNK_AUTH_TOKEN
-#define BLYNK_PRINT Serial
-
-#include <esp_task_wdt.h>
-
-#include <WiFi.h>
-#include <WiFiClient.h>
-#include <BlynkSimpleEsp32.h>
-#include <ESP32Servo.h>
-#include <Keypad.h>
-#include "freertos/task.h"
-
-// Risorse per la stampa degli high water mark
-//#include <stdio.h>
-#include <stdlib.h>
-
-
-// Uncomment this line to print tasks' stack high water mark info periodically
-// #define PRINT_STACK_HWM
+// Uncomment the "#define PRINT_STACK_HWM" line in the header to print tasks' stack high water mark info periodically
 
 #ifdef PRINT_STACK_HWM
 UBaseType_t stackStamp = 0;
@@ -35,68 +14,20 @@ UBaseType_t stackLED = 0;
 UBaseType_t stackBlynk = 0;
 #endif
 
-
 const char auth[] = BLYNK_AUTH_TOKEN;
 
 // WiFi credentials.
 const char ssid[] = SECRET_SSID;
 const char pass[] = SECRET_PSW;
 
-#define INCLUDE_vTaskSuspend 1
-
-// stati
-#define ALARM_ON 19
-#define ALARM_OFF 18
-#define ALARM_TRIGGERED 21
-
-// LED RGB
-#define GREEN_LED 19
-#define BLUE_LED 18
-#define RED_LED 21
-
-// lunghezza PIN
-#define LENGTH_PIN 4
-#define PIR1_PIN 25
-#define PIR2_PIN 32
-#define BUZZER_PIN 33
-#define SERVO_PIN 14
-#define WINDOW_PIN 12
-
-// Blynk LCD positions
-#define X_start 0
-#define Y_first_raw 0
-#define Y_second_raw 1
-
-// Position Camera
-#define POSITION_DEFAULT 90
-#define POSITION_PIR1 180
-#define POSITION_PIR2 0
-#define POSITION_WINDOW 60
-
-// Colors
-#define MAX_COLOR_INTENSITY 255
-#define MIN_COLOR_INTENSITY 0
-
-// WIFI and Blynk connection
-#define WIFI_CONNECTION_TRIES 30 // Number of tries before aborting WiFi connection
-#define BLYNK_CONNECTION_TIMEOUT 10000
-
-#define noTone 0
-
-// CPUs
-#define CPU_0 0
-
 // Setup del keypad
-const byte ROWS = 4; //four rows
-const byte COLS = 4; //four columns
-
 char hexaKeys[ROWS][COLS] = { // Per il Pin
     {'1', '2', '3', 'A'},
     {'4', '5', '6', 'B'},
     {'7', '8', '9', 'C'},
     {'*', '0', '#', 'D'}};
 
-    // PIN associati al keypad monta
+// Keypad pins
 byte rowPins[ROWS] = {23, 22, 5, 17}; //connect to the row pinouts of the keypad
 byte colPins[COLS] = {16, 4, 26, 27}; //connect to the column pinouts of the keypad
 
@@ -104,27 +35,18 @@ byte colPins[COLS] = {16, 4, 26, 27}; //connect to the column pinouts of the key
 // inizializzazione del keypad
 Keypad customKeypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS);
 Servo myservo;
-
 char true_system_pin[LENGTH_PIN] = {'0', '0', '0', '0'}; // password giusta del sistema
 char user_pin[LENGTH_PIN];                      // password inserita dall'utente
 uint8_t index_pin;                                  // indice per gestire user_pin
 
 // Blynk setup
-BlynkTimer timer;
 WidgetLED led_alarm_blynk(V0);
 WidgetLED led_pir1_blynk(V1);
 WidgetLED led_pir2_blynk(V6);
 WidgetLED led_window_blynk(V2);
 WidgetLCD lcd(V5);
 
-// Struttura dati con all'interno gli stati e i bloccati
-struct gestore
-{
-    uint8_t stato; // stato dell'allarme = {'OFF','ON','TRIGGERED'}
-    uint8_t b_sensor;
-    uint8_t position;
-} g;
-
+gestore g;
 
 // Semafori privati e mutex
 SemaphoreHandle_t mutex = NULL;
@@ -134,16 +56,6 @@ SemaphoreHandle_t s_sensor = NULL;
 SemaphoreHandle_t s_siren = NULL;
 SemaphoreHandle_t s_LED = NULL;
 SemaphoreHandle_t s_servo = NULL;
-
-void taskPin(void *pvParameters);
-void taskStamp(void *pvParameters);
-void taskMotionSensor(void *pvParameters);
-void taskSiren(void *pvParameters);
-void taskLED(void *pvParameters);
-void taskWindowSensor(void *pvParameters); // task per il bottone
-void taskServo(void *pvParameters);
-void taskBlynk(void *pvParameters);
-
 
 /**
  * Serve per prendere l'input dall'applicazione Blynk per la rotazione del servo (videocamera). Verrà aggiornata la posizione e
@@ -291,8 +203,6 @@ void start_motion_sensor()
     xSemaphoreTake(s_sensor, portMAX_DELAY); // mi blocco qui nel caso
 }
 
-unsigned long myTime;
-
 
 void motion_sensor(uint8_t pin_pir, uint8_t virtual_pin, char * str_code_blynk, uint8_t position_pir)
 {
@@ -323,7 +233,7 @@ void motion_sensor(uint8_t pin_pir, uint8_t virtual_pin, char * str_code_blynk, 
             Blynk.logEvent(str_code_blynk);
         }
         else {
-            Serial.println("ERRORE: stato del sistema non valido!!!");
+            // No action required
         }
         xSemaphoreGive(mutex);
         // Aggiunto delay
@@ -376,7 +286,7 @@ void window_sensor()
             Blynk.logEvent("window_opened");
         }
         else {
-            Serial.println("ERRORE: stato del sistema non valido!!!");
+            // No action required
         }
 	    xSemaphoreGive(mutex);
     }
@@ -475,13 +385,8 @@ void setup()
     // WiFi and Blynk conenction
     uint8_t connection_tries = 0;
     WiFi.begin(ssid, pass);
-<<<<<<< HEAD
-    Serial.println("Connecting to WiFi...");
-    while (WiFi.status() != WL_CONNECTED && connection_tries < (uint8_t)WIFI_CONNECTION_TRIES) {
-=======
     Serial.print("Connecting to WiFi...");
     while ( (WiFi.status() != WL_CONNECTED) && (connection_tries < (uint8_t)WIFI_CONNECTION_TRIES) ) {
->>>>>>> d4aedb43b1aa0b966eee076f5937d0c05e379564
         delay(500);
         connection_tries++;
         Serial.println(".");
@@ -665,7 +570,7 @@ void taskStamp(void *pvParameters) // This is a task.
 
 void taskPin(void *pvParameters)
 {
-    (void)pvParameters;
+    //(void)pvParameters;
     for (;;)
     {
         get_pin();
