@@ -20,21 +20,26 @@ Per attivare e disattivare l'allarme è presente un tastierino fisico con cui si
    - Button
    - Led RGB
 	
-### Software necessario
+### Software utilizzato
    - FreeRTOS OS
-   - Arduino IDE
+   - VS Code
    - Blynk 
+   - Github per condividere il codice
 
 
 ## Tasks
-TaskPin: legge il carattere inserito dal tastierino a membrana
-TaskStamp: stampa il PIN
-TaskMotionSensor: si occupa di controllare se il PIR ha rilevato movimenti
-TaskWindowSensor: si occupa di controllare se il bottone (che simula apertura della finestra) abbia rilevato aperture
-TaskSiren: quando è svegliato si occupa di modificare lo stato del buzzer in base allo stato in cui si trova il programma
-TaskLED: modifica lo stato del led RGB, in base allo stato in cui si trova il programma
-TaskServo: quando è svegliato modifica lo stato del servo in base allo stato in cui si trova il programma
-TaskBlynk: si occupa di gestire e di tenere aggiornato lo stato del nostro sistema di allarme con app Blynk
+**TaskPin**: legge il carattere inserito dal tastierino a membrana <br>
+**TaskStamp**: stampa il PIN su LCD virtuale <br>
+**TaskMotionSensor**: si occupa di controllare se il PIR ha rilevato movimenti <br>
+**TaskWindowSensor**: si occupa di controllare se il bottone (che simula apertura della finestra) abbia rilevato aperture <br>
+**TaskSiren**: quando è svegliato si occupa di modificare lo stato del buzzer in base allo stato in cui si trova il programma <br>
+**TaskLED**: modifica lo stato del led RGB, in base allo stato in cui si trova il programma<br>
+**TaskServo**: quando è svegliato modifica lo stato del servo in base allo stato in cui si trova il programma <br>
+**TaskBlynk**: si occupa di gestire e di tenere aggiornato lo stato del nostro sistema di allarme con app Blynk <br>
+
+## Diagramma di funzionamento
+
+![Diagramma](./images/Diagramma.png)
 
 
 ## Blynk App
