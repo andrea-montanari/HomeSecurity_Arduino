@@ -39,7 +39,7 @@ Per attivare e disattivare l'allarme è presente un tastierino fisico con cui si
 
 ## Diagramma di funzionamento
 
-![Diagramma](./images/Diagramma.png)
+![Diagramma](./images/diagramma.jpg)
 
 
 ## Blynk App
